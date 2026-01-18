@@ -1,0 +1,151 @@
+{
+  "": {
+    "dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/BetterTabbing.d",
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/BetterTabbing.o",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/master.swiftdeps"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/App/AppDelegate.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppDelegate.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppDelegate~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppDelegate.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppDelegate.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/App/AppState.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppState.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppState~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppState.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppState.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/App/BetterTabbingApp.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/BetterTabbingApp.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/BetterTabbingApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/BetterTabbingApp.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/BetterTabbingApp.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Core/Accessibility/AXWindowHelper.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AXWindowHelper.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AXWindowHelper~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AXWindowHelper.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AXWindowHelper.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Core/EventTap/KeyboardEventTap.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/KeyboardEventTap.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/KeyboardEventTap~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/KeyboardEventTap.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/KeyboardEventTap.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Core/EventTap/ModifierKeyTracker.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ModifierKeyTracker.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ModifierKeyTracker~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ModifierKeyTracker.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ModifierKeyTracker.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Core/Permissions/PermissionManager.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/PermissionManager.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/PermissionManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/PermissionManager.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/PermissionManager.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Core/WindowManagement/WindowCache.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowCache.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowCache~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowCache.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowCache.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Core/WindowManagement/WindowEnumerator.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowEnumerator.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowEnumerator~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowEnumerator.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowEnumerator.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Models/ApplicationModel.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ApplicationModel.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ApplicationModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ApplicationModel.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/ApplicationModel.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Models/UserPreferences.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/UserPreferences.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/UserPreferences~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/UserPreferences.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/UserPreferences.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Models/WindowModel.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowModel.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowModel.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowModel.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Services/FuzzyMatcher.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/FuzzyMatcher.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/FuzzyMatcher~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/FuzzyMatcher.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/FuzzyMatcher.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/Services/WindowSwitcher.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowSwitcher.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowSwitcher~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowSwitcher.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowSwitcher.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/Components/AppTileView.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppTileView.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppTileView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppTileView.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppTileView.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/Components/GlassBackground.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/GlassBackground.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/GlassBackground~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/GlassBackground.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/GlassBackground.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/Components/WindowRowView.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowRowView.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowRowView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowRowView.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowRowView.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/SwitcherWindow/AppGridView.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppGridView.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppGridView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppGridView.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/AppGridView.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/SwitcherWindow/SearchBarView.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchBarView.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchBarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchBarView.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchBarView.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/SwitcherWindow/SearchResultsListView.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchResultsListView.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchResultsListView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchResultsListView.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SearchResultsListView.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/SwitcherWindow/SwitcherPanel.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherPanel.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherPanel~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherPanel.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherPanel.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/SwitcherWindow/SwitcherView.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherView.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherView.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/SwitcherView.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/BetterTabbing/Sources/UI/SwitcherWindow/WindowListView.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowListView.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowListView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowListView.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/WindowListView.dia"
+  },
+  "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/DerivedSources/resource_bundle_accessor.swift": {
+    "object": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/resource_bundle_accessor.swift.o",
+    "swiftmodule": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/resource_bundle_accessor~partial.swiftmodule",
+    "swift-dependencies": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/resource_bundle_accessor.swiftdeps",
+    "diagnostics": "/Users/sidpremkumar/Documents/Projects/BetterTabbing/.build/arm64-apple-macosx/release/BetterTabbing.build/resource_bundle_accessor.dia"
+  }
+}
