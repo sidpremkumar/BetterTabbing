@@ -101,6 +101,23 @@ final class WindowCache: @unchecked Sendable {
         defer { lock.unlock() }
 
         guard let index = cache.firstIndex(where: { $0.pid == pid }) else {
+            // App not in cache - invalidate so next fetch gets fresh data
+            lastUpdate = nil
+            return
+        }
+
+        // Already at front? Just update active state
+        if index == 0 {
+            if !cache.isEmpty && !cache[0].isActive {
+                cache[0] = ApplicationModel(
+                    pid: cache[0].pid,
+                    bundleIdentifier: cache[0].bundleIdentifier,
+                    name: cache[0].name,
+                    icon: cache[0].icon,
+                    windows: cache[0].windows,
+                    isActive: true
+                )
+            }
             return
         }
 
@@ -125,15 +142,28 @@ final class WindowCache: @unchecked Sendable {
         let workspace = NSWorkspace.shared
         let notificationCenter = workspace.notificationCenter
 
-        let notifications: [Notification.Name] = [
-            NSWorkspace.didActivateApplicationNotification,
-            NSWorkspace.didDeactivateApplicationNotification,
+        // Track app activations to maintain correct MRU order
+        let activateObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            // When an app is activated (by any means), move it to front of our cache
+            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+                self?.moveAppToFront(pid: app.processIdentifier)
+                print("[WindowCache] App activated externally: \(app.localizedName ?? "unknown")")
+            }
+        }
+        workspaceObservers.append(activateObserver)
+
+        // These events require cache invalidation (app list changed)
+        let invalidatingNotifications: [Notification.Name] = [
             NSWorkspace.didLaunchApplicationNotification,
             NSWorkspace.didTerminateApplicationNotification,
             NSWorkspace.activeSpaceDidChangeNotification
         ]
 
-        for name in notifications {
+        for name in invalidatingNotifications {
             let observer = notificationCenter.addObserver(
                 forName: name,
                 object: nil,
