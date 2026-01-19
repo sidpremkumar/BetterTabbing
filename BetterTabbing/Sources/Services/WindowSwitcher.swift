@@ -14,8 +14,11 @@ final class WindowSwitcher: @unchecked Sendable {
             return
         }
 
-        // Use Accessibility API to raise the window first - this is more reliable
-        // especially for apps like Warp that may interfere with direct activation
+        // Check current frontmost app - if it's a "sticky" app like Warp, we may need to hide it first
+        let currentFrontmost = NSWorkspace.shared.frontmostApplication
+        let currentFrontmostName = currentFrontmost?.localizedName ?? "unknown"
+
+        // Use Accessibility API to raise the window first
         let axApp = AXUIElementCreateApplication(app.pid)
         var windowsRef: CFTypeRef?
         var firstWindow: AXUIElement?
@@ -29,95 +32,137 @@ final class WindowSwitcher: @unchecked Sendable {
         // Try activation
         var success = runningApp.activate()
 
-        // If standard activate fails, try alternative methods
+        // If standard activate fails, try hiding the current app first then activating
         if !success {
-            print("[WindowSwitcher] Standard activate failed, retrying with delay")
-            // Small delay can help with race conditions
-            usleep(5000)  // 5ms
+            print("[WindowSwitcher] Standard activate failed (from \(currentFrontmostName)), hiding frontmost and retrying")
+            currentFrontmost?.hide()
+            usleep(10000)  // 10ms for hide to take effect
             success = runningApp.activate()
         }
 
-        // If still failing, use AX API to set focused application
-        if !success {
-            print("[WindowSwitcher] Retry failed, using AX focus")
-            let systemWide = AXUIElementCreateSystemWide()
-            let axResult = AXUIElementSetAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, axApp)
-            if axResult == .success {
-                success = true
-                // Also try to focus the main window
-                if let window = firstWindow {
-                    AXUIElementSetAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, window)
-                }
+        // If still failing, try NSWorkspace.open()
+        if !success, let bundleURL = runningApp.bundleURL {
+            print("[WindowSwitcher] Hide+activate failed, trying NSWorkspace.open()")
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            config.createsNewApplicationInstance = false
+
+            let semaphore = DispatchSemaphore(value: 0)
+            var openSuccess = false
+
+            NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { app, error in
+                openSuccess = (error == nil && app != nil)
+                semaphore.signal()
             }
+
+            _ = semaphore.wait(timeout: .now() + 0.1)
+            success = openSuccess
+        }
+
+        // Last resort: AX focus
+        if !success {
+            print("[WindowSwitcher] All methods failed, using AX focus as last resort")
+            let systemWide = AXUIElementCreateSystemWide()
+            AXUIElementSetAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, axApp)
+            if let window = firstWindow {
+                AXUIElementSetAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, window)
+            }
+            success = true  // Assume it worked
         }
 
         print("[WindowSwitcher] Activated \(app.name): \(success)")
 
-        // Update cache order so next quick switch works correctly (fast, no re-enumeration)
-        // Pass fromOurSwitch=true to suppress the duplicate notification
+        // Update cache order
         WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
     }
 
     /// Switch to a specific window within an app
-    func switchTo(window: WindowModel, in app: ApplicationModel) {
+    /// windowIndex is the index in the app.windows array for fallback matching
+    func switchTo(window: WindowModel, in app: ApplicationModel, windowIndex: Int? = nil) {
         guard let runningApp = NSRunningApplication(processIdentifier: app.pid) else {
             print("[WindowSwitcher] Could not find running app for PID: \(app.pid)")
             return
         }
 
-        // Get the AXUIElement for the application
-        let axApp = AXUIElementCreateApplication(app.pid)
+        let axWindows = AXWindowHelper.getOrderedAXWindows(for: app.pid)
 
-        // Find and raise the specific window
-        var windowsRef: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
-
-        guard result == .success,
-              let windows = windowsRef as? [AXUIElement] else {
-            // Fallback to just activating the app
-            print("[WindowSwitcher] Could not get windows, falling back to app activation")
-            runningApp.activate()
+        // Strategy 1: Try to find by window index (most reliable since we enumerate in AX order)
+        if let index = windowIndex, index < axWindows.count {
+            let axWindow = axWindows[index]
+            print("[WindowSwitcher] Using window index \(index)")
+            raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app)
             return
         }
 
-        // Find matching window by title
-        var foundWindow = false
-        for axWindow in windows {
+        // Strategy 2: Try to find the window by CGWindowID
+        if let axWindow = AXWindowHelper.getAXWindow(for: window.windowID, pid: app.pid) {
+            print("[WindowSwitcher] Found window by ID \(window.windowID)")
+            raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app)
+            return
+        }
+
+        print("[WindowSwitcher] Could not find window by ID \(window.windowID), trying title match")
+
+        // Strategy 3: Fall back to title matching
+        for axWindow in axWindows {
             var titleRef: CFTypeRef?
             AXUIElementCopyAttributeValue(axWindow, kAXTitleAttribute as CFString, &titleRef)
 
             if let title = titleRef as? String, title == window.title {
-                // Unminimize if needed
-                if window.isMinimized {
-                    var minimizedRef: CFTypeRef?
-                    AXUIElementCopyAttributeValue(axWindow, kAXMinimizedAttribute as CFString, &minimizedRef)
-                    if let isMinimized = minimizedRef as? Bool, isMinimized {
-                        AXUIElementSetAttributeValue(axWindow, kAXMinimizedAttribute as CFString, false as CFTypeRef)
-                    }
-                }
-
-                // Raise the window
-                let raiseResult = AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
-                foundWindow = raiseResult == .success
-                print("[WindowSwitcher] Raised window '\(title)': \(foundWindow)")
-                break
+                raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app)
+                return
             }
         }
 
-        if !foundWindow {
-            print("[WindowSwitcher] Window not found by title, activating first window")
-            // Try to raise the first window
-            if let firstWindow = windows.first {
-                AXUIElementPerformAction(firstWindow, kAXRaiseAction as CFString)
+        // Strategy 4: Try partial title match (for truncated titles)
+        for axWindow in axWindows {
+            var titleRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(axWindow, kAXTitleAttribute as CFString, &titleRef)
+
+            if let title = titleRef as? String, !title.isEmpty, !window.title.isEmpty,
+               (title.hasPrefix(window.title) || window.title.hasPrefix(title) ||
+                title.contains(window.title) || window.title.contains(title)) {
+                print("[WindowSwitcher] Found window by partial title match: '\(title)'")
+                raiseAndActivate(axWindow: axWindow, window: window, runningApp: runningApp, app: app)
+                return
             }
         }
+
+        print("[WindowSwitcher] Window not found by ID or title, activating first window")
+
+        // Strategy 5: Just activate the first window
+        if let firstWindow = axWindows.first {
+            AXUIElementPerformAction(firstWindow, kAXRaiseAction as CFString)
+        }
+
+        let activated = runningApp.activate()
+        print("[WindowSwitcher] Activated \(app.name): \(activated)")
+
+        if activated {
+            WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
+        }
+    }
+
+    /// Helper to raise a window and activate the app
+    private func raiseAndActivate(axWindow: AXUIElement, window: WindowModel, runningApp: NSRunningApplication, app: ApplicationModel) {
+        // Unminimize if needed
+        if window.isMinimized {
+            var minimizedRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(axWindow, kAXMinimizedAttribute as CFString, &minimizedRef)
+            if let isMinimized = minimizedRef as? Bool, isMinimized {
+                AXUIElementSetAttributeValue(axWindow, kAXMinimizedAttribute as CFString, false as CFTypeRef)
+            }
+        }
+
+        // Raise the window
+        let raiseResult = AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
+        print("[WindowSwitcher] Raised window '\(window.title)': \(raiseResult == .success)")
 
         // Activate the app
         let activated = runningApp.activate()
         print("[WindowSwitcher] Activated \(app.name): \(activated)")
 
-        // Update cache order so next quick switch works correctly (fast, no re-enumeration)
-        // Pass fromOurSwitch=true to suppress the duplicate notification
+        // Update cache order
         if activated {
             WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
         }

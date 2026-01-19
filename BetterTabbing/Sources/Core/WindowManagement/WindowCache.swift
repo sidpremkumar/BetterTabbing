@@ -267,23 +267,36 @@ final class WindowCache: @unchecked Sendable {
         }
         workspaceObservers.append(activateObserver)
 
-        // These events require cache invalidation (app list changed)
-        let invalidatingNotifications: [Notification.Name] = [
+        // App launch/terminate require immediate cache refresh (not just invalidation)
+        let refreshNotifications: [Notification.Name] = [
             NSWorkspace.didLaunchApplicationNotification,
-            NSWorkspace.didTerminateApplicationNotification,
-            NSWorkspace.activeSpaceDidChangeNotification
+            NSWorkspace.didTerminateApplicationNotification
         ]
 
-        for name in invalidatingNotifications {
+        for name in refreshNotifications {
             let observer = notificationCenter.addObserver(
                 forName: name,
                 object: nil,
                 queue: .main
-            ) { [weak self] _ in
-                self?.invalidate()
+            ) { [weak self] notification in
+                guard let self = self else { return }
+                let appName = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.localizedName ?? "unknown"
+                print("[WindowCache] App \(name == NSWorkspace.didLaunchApplicationNotification ? "launched" : "terminated"): \(appName), refreshing cache")
+                self.invalidate()
+                self.prefetchAsync()
             }
             workspaceObservers.append(observer)
         }
+
+        // Space change just needs invalidation (will refresh on next access)
+        let spaceObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.invalidate()
+        }
+        workspaceObservers.append(spaceObserver)
 
         print("[WindowCache] Started monitoring workspace notifications")
     }

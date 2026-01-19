@@ -1,12 +1,11 @@
 import CoreGraphics
 import AppKit
+import ApplicationServices
 
 final class WindowEnumerator {
 
     struct EnumerationOptions {
         var includeMinimized: Bool = true
-        var includeAllSpaces: Bool = false
-        var excludeDesktopElements: Bool = true
         var minimumWidth: CGFloat = 50
         var minimumHeight: CGFloat = 50
 
@@ -22,121 +21,134 @@ final class WindowEnumerator {
         "com.apple.SystemUIServer"
     ]
 
-    /// Intermediate struct for first pass (before AX enrichment)
-    private struct RawWindowInfo {
-        let windowID: CGWindowID
-        let ownerPID: pid_t
-        let ownerName: String
-        let cgWindowName: String?
-        let bounds: CGRect
-        let isOnScreen: Bool
-    }
-
-    func enumerate(options: EnumerationOptions = .default) -> [WindowInfo] {
-        var cgOptions: CGWindowListOption = []
-
-        if options.excludeDesktopElements {
-            cgOptions.insert(.excludeDesktopElements)
-        }
-
-        if !options.includeAllSpaces {
-            cgOptions.insert(.optionOnScreenOnly)
-        }
-
-        guard let windowList = CGWindowListCopyWindowInfo(cgOptions, kCGNullWindowID) as? [[String: Any]] else {
-            return []
-        }
-
-        // First pass: collect basic window info and PIDs
-        var rawWindows: [RawWindowInfo] = []
-        var pidsWithWindows: Set<pid_t> = []
-
-        for dict in windowList {
-            guard let windowID = dict[kCGWindowNumber as String] as? CGWindowID,
-                  let ownerPID = dict[kCGWindowOwnerPID as String] as? pid_t else {
-                continue
-            }
-
-            let layer = dict[kCGWindowLayer as String] as? Int ?? -1
-            if layer != 0 {
-                continue  // Normal windows only (layer 0)
-            }
-
-            // Get bounds and check minimum size
-            let boundsDict = dict[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
-            let width = boundsDict["Width"] ?? 0
-            let height = boundsDict["Height"] ?? 0
-
-            if width < options.minimumWidth || height < options.minimumHeight {
-                continue
-            }
-
-            let ownerName = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
-            let cgWindowName = dict[kCGWindowName as String] as? String
-
-            rawWindows.append(RawWindowInfo(
-                windowID: windowID,
-                ownerPID: ownerPID,
-                ownerName: ownerName,
-                cgWindowName: cgWindowName,
-                bounds: CGRect(x: boundsDict["X"] ?? 0, y: boundsDict["Y"] ?? 0, width: width, height: height),
-                isOnScreen: dict[kCGWindowIsOnscreen as String] as? Bool ?? false
-            ))
-            pidsWithWindows.insert(ownerPID)
-        }
-
-        // Second pass: get AX window titles only for PIDs that have windows (runs in parallel)
-        let axWindowTitles = AXWindowHelper.getWindowTitles(for: pidsWithWindows)
-
-        // Build final WindowInfo with enriched titles
-        return rawWindows.map { raw in
-            let windowName: String?
-            if let axTitle = axWindowTitles[raw.windowID], !axTitle.isEmpty {
-                windowName = axTitle
-            } else if let cgName = raw.cgWindowName, !cgName.isEmpty {
-                windowName = cgName
-            } else {
-                windowName = nil
-            }
-
-            return WindowInfo(
-                windowID: raw.windowID,
-                ownerPID: raw.ownerPID,
-                ownerName: raw.ownerName,
-                windowName: windowName,
-                bounds: raw.bounds,
-                isOnScreen: raw.isOnScreen,
-                isMinimized: !raw.isOnScreen && options.includeMinimized,
-                spaceID: nil
-            )
-        }
-    }
-
+    /// Enumerate windows using Accessibility API as the primary source
+    /// This is more reliable for window switching since we use AX to raise windows
     func enumerateGroupedByApp(options: EnumerationOptions = .default) -> [ApplicationModel] {
-        let windows = enumerate(options: options)
-
-        // Group windows by PID
-        var appWindows: [pid_t: [WindowInfo]] = [:]
-        for window in windows {
-            appWindows[window.ownerPID, default: []].append(window)
+        // Get all running apps with regular activation policy (visible in Dock)
+        let runningApps = NSWorkspace.shared.runningApplications.filter { app in
+            guard let bundleID = app.bundleIdentifier else { return false }
+            return app.activationPolicy == .regular && !skipBundleIDs.contains(bundleID)
         }
 
-        // Create application models
         var applications: [ApplicationModel] = []
 
-        for (pid, windows) in appWindows {
-            guard let app = NSRunningApplication(processIdentifier: pid),
-                  let name = app.localizedName,
+        for app in runningApps {
+            guard let name = app.localizedName,
                   let bundleIdentifier = app.bundleIdentifier else {
                 continue
             }
 
-            // Skip system apps
-            if skipBundleIDs.contains(bundleIdentifier) {
-                continue
+            let pid = app.processIdentifier
+            let axApp = AXUIElementCreateApplication(pid)
+
+            // Get windows from Accessibility API
+            var windowsRef: CFTypeRef?
+            let axResult = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
+
+            // If AX fails or returns empty, include the app with a synthetic window
+            // This handles apps like Steam/games that may not fully support Accessibility
+            let axWindows = (axResult == .success) ? (windowsRef as? [AXUIElement]) ?? [] : []
+
+            if axResult != .success {
+                print("[WindowEnumerator] AX failed for \(name) (error: \(axResult.rawValue)), using synthetic window")
+            } else if axWindows.isEmpty {
+                print("[WindowEnumerator] AX returned empty windows for \(name), using synthetic window")
+            }
+
+            var windows: [WindowInfo] = []
+
+            for axWindow in axWindows {
+                // Get window ID
+                var windowID: CGWindowID = 0
+                let idResult = _AXUIElementGetWindow(axWindow, &windowID)
+
+                // Get title
+                var titleRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(axWindow, kAXTitleAttribute as CFString, &titleRef)
+                let title = titleRef as? String
+
+                // Get position and size
+                var positionRef: CFTypeRef?
+                var sizeRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(axWindow, kAXPositionAttribute as CFString, &positionRef)
+                AXUIElementCopyAttributeValue(axWindow, kAXSizeAttribute as CFString, &sizeRef)
+
+                var position = CGPoint.zero
+                var size = CGSize.zero
+
+                if let posValue = positionRef {
+                    AXValueGetValue(posValue as! AXValue, .cgPoint, &position)
+                }
+                if let sizeValue = sizeRef {
+                    AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+                }
+
+                // Skip tiny windows
+                if size.width < options.minimumWidth || size.height < options.minimumHeight {
+                    continue
+                }
+
+                // Check if minimized
+                var minimizedRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(axWindow, kAXMinimizedAttribute as CFString, &minimizedRef)
+                let isMinimized = (minimizedRef as? Bool) ?? false
+
+                if isMinimized && !options.includeMinimized {
+                    continue
+                }
+
+                // Get subrole to filter out non-standard windows
+                var subroleRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(axWindow, kAXSubroleAttribute as CFString, &subroleRef)
+                let subrole = subroleRef as? String
+
+                // Skip known non-window subroles (like system overlays)
+                // Be permissive - allow windows with no subrole or unknown subroles
+                if let subrole = subrole {
+                    let invalidSubroles = ["AXSystemDialog", "AXSheet", "AXDrawer", "AXUnknown"]
+                    if invalidSubroles.contains(subrole) {
+                        continue
+                    }
+                }
+
+                // Use a valid window ID, or generate a unique one based on index
+                let finalWindowID: CGWindowID
+                if idResult == .success && windowID != 0 {
+                    finalWindowID = windowID
+                } else {
+                    // Generate a pseudo-ID from PID and window index
+                    finalWindowID = CGWindowID(pid) << 16 | CGWindowID(windows.count)
+                }
+
+                windows.append(WindowInfo(
+                    windowID: finalWindowID,
+                    ownerPID: pid,
+                    ownerName: name,
+                    windowName: title,
+                    bounds: CGRect(origin: position, size: size),
+                    isOnScreen: !isMinimized,
+                    isMinimized: isMinimized,
+                    spaceID: nil
+                ))
             }
 
             let icon = app.icon ?? NSImage(named: NSImage.applicationIconName) ?? NSImage()
+
+            // If no windows found through AX, create a synthetic window
+            // This ensures apps like Steam/games still appear in the switcher
+            if windows.isEmpty {
+                let syntheticWindow = WindowInfo(
+                    windowID: CGWindowID(pid),
+                    ownerPID: pid,
+                    ownerName: name,
+                    windowName: name,  // Use app name as window title
+                    bounds: .zero,
+                    isOnScreen: true,
+                    isMinimized: false,
+                    spaceID: nil
+                )
+                windows.append(syntheticWindow)
+            }
 
             applications.append(ApplicationModel(
                 pid: pid,

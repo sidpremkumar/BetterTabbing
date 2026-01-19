@@ -2,10 +2,10 @@
   <img src="assets/icon.png" alt="BetterTabbing Icon" width="128" height="128">
 </p>
 
-<h1 align="center">BetterTabbing</h1>
+<h1 align="center">✨ BetterTabbing</h1>
 
 <p align="center">
-  A fast, keyboard-driven CMD+TAB replacement for macOS with window-level switching and fuzzy search.
+  <strong>⚡ A fast, keyboard-driven CMD+TAB replacement for macOS with window-level switching and fuzzy search.</strong>
 </p>
 
 <p align="center">
@@ -14,47 +14,47 @@
 
 ---
 
-## Features
+## 🚀 Features
 
-- **Window-level switching** — Switch to specific windows, not just apps
-- **Fuzzy search** — Type to filter apps and windows instantly
-- **Quick switch** — Fast CMD+TAB style switching without UI delay
-- **Liquid Glass UI** — Native macOS 26 glass effect
-- **Configurable shortcut** — Use ⌥TAB (default) or replace system ⌘TAB
+- 🪟 **Window-level switching** — Switch to specific windows, not just apps
+- 🔍 **Fuzzy search** — Type to filter apps and windows instantly
+- ⚡ **Quick switch** — Fast CMD+TAB style switching without UI delay
+- 💎 **Liquid Glass UI** — Native macOS 26 glass effect
+- ⌨️ **Configurable shortcut** — Use ⌥TAB (default) or replace system ⌘TAB
 
-## Installation
+## 📦 Installation
 
-### Download
+### 💾 Download
 Grab the latest release from [Releases](https://github.com/user/BetterTabbing/releases).
 
-### Build from source
+### 🔨 Build from source
 ```bash
 git clone https://github.com/user/BetterTabbing.git
 cd BetterTabbing
 ./build-app.sh
 ```
 
-### Permissions
+### 🔐 Permissions
 BetterTabbing requires:
-- **Accessibility** — For window management and switching
-- **Input Monitoring** — For global keyboard shortcuts
+- ♿ **Accessibility** — For window management and switching
+- ⌨️ **Input Monitoring** — For global keyboard shortcuts
 
-Grant these in System Settings → Privacy & Security.
+Grant these in **System Settings → Privacy & Security**.
 
-## Usage
+## ⌨️ Usage
 
 | Shortcut | Action |
 |----------|--------|
-| ⌥TAB | Open switcher (or ⌘TAB if configured) |
-| TAB | Next app |
-| ⇧TAB | Previous app |
-| ` | Next window in selected app |
-| ⇧` | Previous window |
-| Return | Activate search |
-| Escape | Dismiss |
-| Release modifier | Confirm selection |
+| ⌥TAB | 🎯 Open switcher (or ⌘TAB if configured) |
+| TAB | ⬇️ Next app |
+| ⇧TAB | ⬆️ Previous app |
+| ` | ➡️ Next window in selected app |
+| ⇧` | ⬅️ Previous window |
+| Return | 🔍 Activate search |
+| Escape | ❌ Dismiss |
+| Release modifier | ✅ Confirm selection |
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 BetterTabbing/
@@ -129,18 +129,18 @@ AppDelegate.handleShortcutEvent()
           SwitcherView (SwiftUI)
 ```
 
-### Performance
+### ⚡ Performance
 
-- **< 50ms** window enumeration (parallel AX fetching)
-- **Lock-free reads** from cache during UI updates
-- **120ms quick-switch threshold** — releases before timer = no UI
-- **Instant hide** — no animations on dismiss
+- ⚡ **< 50ms** window enumeration (parallel AX fetching)
+- 🔓 **Lock-free reads** from cache during UI updates
+- ⏱️ **120ms quick-switch threshold** — releases before timer = no UI
+- 🚀 **Instant hide** — no animations on dismiss
 
-## Requirements
+## 📋 Requirements
 
-- macOS 13.0+
-- Swift 5.9+
+- 🍎 macOS 26+
+- 🦉 Swift 5.9+
 
-## License
+## 📄 License
 
 MIT

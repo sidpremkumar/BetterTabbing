@@ -349,7 +349,7 @@ final class SwitcherPanel: NSPanel {
         // Then switch synchronously
         if app.windows.indices.contains(windowIndex) {
             let window = app.windows[windowIndex]
-            WindowSwitcher.shared.switchTo(window: window, in: app)
+            WindowSwitcher.shared.switchTo(window: window, in: app, windowIndex: windowIndex)
         } else {
             WindowSwitcher.shared.activate(app: app)
         }
