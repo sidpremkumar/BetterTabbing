@@ -16,7 +16,8 @@ final class WindowCache: @unchecked Sendable {
     private var prefetchInProgress = false
 
     // Suppress external activation notifications during our own switches
-    private var suppressExternalActivation = false
+    // Only suppress the specific app we just switched to
+    private var suppressedPid: pid_t?
     private var suppressUntil: Date?
 
     private let enumerator = WindowEnumerator()
@@ -174,10 +175,10 @@ final class WindowCache: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        // If this is from our own switch, suppress external notifications briefly
+        // If this is from our own switch, suppress external notifications for this specific app briefly
         if fromOurSwitch {
-            suppressExternalActivation = true
-            suppressUntil = Date().addingTimeInterval(0.5)  // 500ms window
+            suppressedPid = pid
+            suppressUntil = Date().addingTimeInterval(0.3)  // 300ms window (shorter to allow rapid switching)
         }
 
         guard let index = cache.firstIndex(where: { $0.pid == pid }) else {
@@ -226,14 +227,14 @@ final class WindowCache: @unchecked Sendable {
         print("[WindowCache] moveAppToFront: \(appName) moved from index \(index) to front. Order: \(topApps)")
     }
 
-    /// Check if external activation should be suppressed (called from notification handler)
-    private func shouldSuppressExternalActivation() -> Bool {
-        if suppressExternalActivation {
+    /// Check if external activation should be suppressed for a specific PID
+    private func shouldSuppressExternalActivation(for pid: pid_t) -> Bool {
+        if let suppressedPid = suppressedPid, suppressedPid == pid {
             if let until = suppressUntil, Date() < until {
                 return true
             }
             // Suppression expired
-            suppressExternalActivation = false
+            self.suppressedPid = nil
             suppressUntil = nil
         }
         return false
@@ -250,20 +251,19 @@ final class WindowCache: @unchecked Sendable {
             queue: .main
         ) { [weak self] notification in
             guard let self = self else { return }
+            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
 
-            // Skip if we're suppressing (our own switch just happened)
-            if self.shouldSuppressExternalActivation() {
-                if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
-                    print("[WindowCache] Ignoring our own activation: \(app.localizedName ?? "unknown")")
-                }
+            let pid = app.processIdentifier
+
+            // Skip if we're suppressing this specific app (our own switch just happened)
+            if self.shouldSuppressExternalActivation(for: pid) {
+                print("[WindowCache] Ignoring our own activation: \(app.localizedName ?? "unknown")")
                 return
             }
 
             // When an app is activated externally, move it to front of our cache
-            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
-                self.moveAppToFront(pid: app.processIdentifier, fromOurSwitch: false)
-                print("[WindowCache] App activated externally: \(app.localizedName ?? "unknown")")
-            }
+            self.moveAppToFront(pid: pid, fromOurSwitch: false)
+            print("[WindowCache] App activated externally: \(app.localizedName ?? "unknown")")
         }
         workspaceObservers.append(activateObserver)
 

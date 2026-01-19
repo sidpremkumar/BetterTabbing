@@ -54,6 +54,12 @@ final class SwitcherPanel: NSPanel {
             .environmentObject(AppState.shared)
 
         hostingView = NSHostingView(rootView: AnyView(switcherView))
+
+        // Critical: Disable Auto Layout constraints for the hosting view
+        // This prevents conflicts between NSPanel's frame-based layout and SwiftUI's layout system
+        hostingView?.translatesAutoresizingMaskIntoConstraints = true
+        hostingView?.autoresizingMask = [.width, .height]
+
         contentView = hostingView
     }
 
@@ -160,11 +166,19 @@ final class SwitcherPanel: NSPanel {
             y: screen.frame.midY - panelSize.height / 2 + 40
         )
 
-        // Animate the frame change
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            self.animator().setFrame(CGRect(origin: origin, size: panelSize), display: true)
+        let newFrame = CGRect(origin: origin, size: panelSize)
+
+        // Defer frame change to next run loop iteration to avoid constraint conflicts
+        // during the current layout cycle
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.isVisible else { return }
+
+            // Animate the frame change
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.animator().setFrame(newFrame, display: true)
+            }
         }
     }
 

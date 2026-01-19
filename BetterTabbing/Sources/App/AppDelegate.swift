@@ -186,14 +186,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Use cached data (lock-free read) - don't wait for any prefetch
         let apps = WindowCache.shared.getCachedApplications()
 
-        // Switch to the second app (index 1) which is the "previous" app
-        // The list is ordered by recent usage, so index 0 is current, index 1 is previous
         guard apps.count > 1 else {
             print("[BetterTabbing] Quick switch: Not enough apps (have \(apps.count))")
             return
         }
 
-        let previousApp = apps[1]
+        // Get the ACTUAL current frontmost app to ensure we switch to something different
+        // This is critical because the cache MRU order might be slightly stale
+        let frontmostPid = NSWorkspace.shared.frontmostApplication?.processIdentifier
+
+        // Find the first app in the MRU list that is NOT the current frontmost app
+        var targetApp: ApplicationModel?
+        for app in apps {
+            if app.pid != frontmostPid {
+                targetApp = app
+                break
+            }
+        }
+
+        guard let previousApp = targetApp else {
+            print("[BetterTabbing] Quick switch: No different app to switch to")
+            return
+        }
+
         print("[BetterTabbing] Quick switch to: \(previousApp.name)")
 
         // Activate synchronously for speed

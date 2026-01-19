@@ -14,14 +14,48 @@ final class WindowSwitcher: @unchecked Sendable {
             return
         }
 
-        let success = runningApp.activate(options: [.activateIgnoringOtherApps])
+        // Use Accessibility API to raise the window first - this is more reliable
+        // especially for apps like Warp that may interfere with direct activation
+        let axApp = AXUIElementCreateApplication(app.pid)
+        var windowsRef: CFTypeRef?
+        var firstWindow: AXUIElement?
+        if AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+           let windows = windowsRef as? [AXUIElement],
+           let window = windows.first {
+            firstWindow = window
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        }
+
+        // Try activation
+        var success = runningApp.activate()
+
+        // If standard activate fails, try alternative methods
+        if !success {
+            print("[WindowSwitcher] Standard activate failed, retrying with delay")
+            // Small delay can help with race conditions
+            usleep(5000)  // 5ms
+            success = runningApp.activate()
+        }
+
+        // If still failing, use AX API to set focused application
+        if !success {
+            print("[WindowSwitcher] Retry failed, using AX focus")
+            let systemWide = AXUIElementCreateSystemWide()
+            let axResult = AXUIElementSetAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, axApp)
+            if axResult == .success {
+                success = true
+                // Also try to focus the main window
+                if let window = firstWindow {
+                    AXUIElementSetAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, window)
+                }
+            }
+        }
+
         print("[WindowSwitcher] Activated \(app.name): \(success)")
 
         // Update cache order so next quick switch works correctly (fast, no re-enumeration)
         // Pass fromOurSwitch=true to suppress the duplicate notification
-        if success {
-            WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
-        }
+        WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
     }
 
     /// Switch to a specific window within an app
@@ -42,7 +76,7 @@ final class WindowSwitcher: @unchecked Sendable {
               let windows = windowsRef as? [AXUIElement] else {
             // Fallback to just activating the app
             print("[WindowSwitcher] Could not get windows, falling back to app activation")
-            runningApp.activate(options: [.activateIgnoringOtherApps])
+            runningApp.activate()
             return
         }
 
@@ -79,7 +113,7 @@ final class WindowSwitcher: @unchecked Sendable {
         }
 
         // Activate the app
-        let activated = runningApp.activate(options: [.activateIgnoringOtherApps])
+        let activated = runningApp.activate()
         print("[WindowSwitcher] Activated \(app.name): \(activated)")
 
         // Update cache order so next quick switch works correctly (fast, no re-enumeration)
@@ -101,12 +135,12 @@ final class WindowSwitcher: @unchecked Sendable {
         guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
               let windows = windowsRef as? [AXUIElement],
               let firstWindow = windows.first else {
-            runningApp.activate(options: [.activateIgnoringOtherApps])
+            runningApp.activate()
             return
         }
 
         // Raise the first window (ideally we'd match by CGWindowID but that requires private API)
         AXUIElementPerformAction(firstWindow, kAXRaiseAction as CFString)
-        runningApp.activate(options: [.activateIgnoringOtherApps])
+        runningApp.activate()
     }
 }
