@@ -118,6 +118,62 @@ final class AppState: ObservableObject {
         selectedWindowIndex = (selectedWindowIndex - 1 + count) % count
     }
 
+    /// Move selection to the row above in the grid
+    /// The grid uses adaptive columns ~92px wide (80-100 min/max + spacing)
+    /// For a ~660px content width, that's approximately 7 items per row
+    func selectAppInRowAbove() {
+        markKeyboardNavigation()
+        let count = filteredApplications.count
+        guard count > 0 else { return }
+
+        let itemsPerRow = calculateItemsPerRow()
+        let newIndex = selectedAppIndex - itemsPerRow
+
+        if newIndex >= 0 {
+            selectedAppIndex = newIndex
+            selectedWindowIndex = 0
+        }
+        // If already on first row, don't wrap - stay in place
+    }
+
+    /// Move selection to the row below in the grid
+    func selectAppInRowBelow() {
+        markKeyboardNavigation()
+        let count = filteredApplications.count
+        guard count > 0 else { return }
+
+        let itemsPerRow = calculateItemsPerRow()
+        let newIndex = selectedAppIndex + itemsPerRow
+
+        if newIndex < count {
+            selectedAppIndex = newIndex
+            selectedWindowIndex = 0
+        } else {
+            // If going past the last row, go to the last item
+            let lastIndex = count - 1
+            if selectedAppIndex != lastIndex {
+                selectedAppIndex = lastIndex
+                selectedWindowIndex = 0
+            }
+        }
+    }
+
+    /// Calculate approximate items per row based on dynamic panel width
+    /// Grid uses .adaptive(minimum: 76, maximum: 90) with 6px spacing
+    /// Tile is ~76px with 6px padding = ~82px per item
+    private func calculateItemsPerRow() -> Int {
+        // Calculate based on app count (matching SwitcherView.calculateWidth())
+        let appCount = filteredApplications.count
+        let itemWidth: CGFloat = 82  // ~76-90 tile + 6 spacing
+
+        // Width calculation matches SwitcherView
+        let idealItemsPerRow = min(appCount, 8)
+        let baseWidth = CGFloat(idealItemsPerRow) * 92 + 32
+        let contentWidth = min(max(baseWidth, 400), 750) - 32  // Subtract padding
+
+        return max(1, Int(contentWidth / itemWidth))
+    }
+
     func reset() {
         isVisible = false
         selectedAppIndex = 0

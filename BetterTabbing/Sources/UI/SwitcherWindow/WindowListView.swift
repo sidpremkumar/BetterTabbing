@@ -7,29 +7,31 @@ struct WindowListView: View {
     var onWindowClicked: ((Int) -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Section header
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            // Section header - minimal
+            HStack(spacing: 6) {
                 Text("Windows")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
+                    .tracking(0.5)
 
-                Spacer()
+                Text("·")
+                    .foregroundStyle(.quaternary)
 
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     KeyCap(symbol: "`")
-                    Text("to cycle")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
+                    Text("cycle")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.quaternary)
                 }
             }
             .padding(.horizontal, 4)
 
-            // Window list with scroll-to-selection
+            // Window list
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         ForEach(Array(app.windows.enumerated()), id: \.element.id) { index, window in
                             WindowRowView(
                                 window: window,
@@ -48,7 +50,7 @@ struct WindowListView: View {
                     }
                 }
                 .onChange(of: selectedWindowIndex) { oldValue, newValue in
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(.easeInOut(duration: 0.1)) {
                         proxy.scrollTo(newValue, anchor: .center)
                     }
                 }

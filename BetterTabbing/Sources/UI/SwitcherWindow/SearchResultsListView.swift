@@ -6,47 +6,46 @@ struct SearchResultsListView: View {
     let onResultClicked: (Int) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             // Section header
             HStack {
                 Text("Results")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
+                    .tracking(0.5)
 
                 Spacer()
 
-                Text("\(min(results.count, 10)) of \(results.count)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                if results.count > 10 {
+                    Text("\(min(results.count, 10)) of \(results.count)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.quaternary)
+                }
             }
             .padding(.horizontal, 4)
 
             if results.isEmpty {
-                // No results state
+                // No results state - compact
                 HStack {
                     Spacer()
-                    VStack(spacing: 8) {
+                    VStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 24))
+                            .font(.system(size: 20))
                             .foregroundStyle(.tertiary)
-                        Text("No matches found")
-                            .font(.system(size: 12))
+                        Text("No matches")
+                            .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 20)
+                    .padding(.vertical, 16)
                     Spacer()
                 }
             } else {
-                // Results list - dynamic height up to max, then scrollable
-                let displayResults = Array(results.prefix(15))
-                let rowHeight: CGFloat = 52  // Approximate height per row
-                let maxVisibleRows = 8
-                let contentHeight = CGFloat(displayResults.count) * rowHeight
-                let maxHeight = CGFloat(maxVisibleRows) * rowHeight
+                // Results list
+                let displayResults = Array(results.prefix(10))
 
                 ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: displayResults.count > maxVisibleRows) {
+                    ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 2) {
                             ForEach(Array(displayResults.enumerated()), id: \.element.id) { index, result in
                                 SearchResultRowView(
@@ -59,11 +58,10 @@ struct SearchResultsListView: View {
                                 }
                             }
                         }
-                        .padding(.vertical, 2)
                     }
-                    .frame(height: min(contentHeight, maxHeight))
+                    .frame(maxHeight: 320)
                     .onChange(of: selectedIndex) { oldValue, newValue in
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        withAnimation(.easeInOut(duration: 0.1)) {
                             proxy.scrollTo(newValue, anchor: .center)
                         }
                     }
@@ -77,26 +75,28 @@ struct SearchResultRowView: View {
     let result: SearchResult
     let isSelected: Bool
 
+    @State private var isHovered = false
+
     var body: some View {
-        HStack(spacing: 12) {
-            // App icon with subtle shadow
+        HStack(spacing: 10) {
+            // App icon
             Image(nsImage: result.icon)
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 32, height: 32)
+                .frame(width: 28, height: 28)
                 .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
 
-            VStack(alignment: .leading, spacing: 2) {
-                // Primary text (window title or app name)
+            VStack(alignment: .leading, spacing: 1) {
+                // Primary text
                 Text(result.displayName)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                // Subtitle (app name for windows, window title for apps)
+                // Subtitle
                 if let subtitle = result.displaySubtitle {
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -104,39 +104,38 @@ struct SearchResultRowView: View {
 
             Spacer(minLength: 0)
 
-            // Window indicator when targeting specific window
+            // Window indicator
             if result.targetWindowIndex != nil {
                 Image(systemName: "macwindow")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundStyle(isSelected ? .secondary : .tertiary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            ZStack {
-                if isSelected {
-                    // Selected state - vibrant highlight
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.2))
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    Color.accentColor.opacity(0.5),
-                                    Color.accentColor.opacity(0.2)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 0.5
-                        )
-                }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(backgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+
+    private var backgroundColor: some View {
+        Group {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.2))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.accentColor.opacity(0.3), lineWidth: 0.5)
+                    )
+            } else if isHovered {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            } else {
+                Color.clear
             }
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
+        }
     }
 }

@@ -8,14 +8,14 @@ struct AppGridView: View {
     var onAppHovered: ((Int) -> Void)?
 
     private let columns = [
-        GridItem(.adaptive(minimum: 80, maximum: 100), spacing: 12)
+        GridItem(.adaptive(minimum: 76, maximum: 90), spacing: 6)
     ]
 
     var body: some View {
         if applications.isEmpty {
             emptyStateView
         } else {
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 6) {
                 ForEach(Array(applications.enumerated()), id: \.element.id) { index, app in
                     AppTileView(
                         app: app,
@@ -37,21 +37,20 @@ struct AppGridView: View {
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Image(systemName: "rectangle.stack.badge.minus")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
-
-            Text("No Applications Found")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            Text("Open some applications to switch between them")
-                .font(.subheadline)
+                .font(.system(size: 28))
                 .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
+
+            Text("No Applications")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Text("Open some apps to switch")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
         }
-        .frame(maxWidth: .infinity, minHeight: 150)
+        .frame(maxWidth: .infinity, minHeight: 100)
         .padding()
     }
 }

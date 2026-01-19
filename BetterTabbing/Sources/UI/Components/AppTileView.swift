@@ -3,83 +3,76 @@ import SwiftUI
 struct AppTileView: View {
     let app: ApplicationModel
     let isSelected: Bool
-    let namespace: Namespace.ID
+    let namespace: Namespace.ID  // Kept for API compatibility but not used
     var onHover: ((Bool) -> Void)? = nil
 
     @State private var isHovered = false
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             ZStack {
-                // Selection background
+                // Selection/hover background
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(backgroundColor)
+
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .matchedGeometryEffect(id: "selection-bg", in: namespace)
-
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.15))
-                        .matchedGeometryEffect(id: "selection", in: namespace)
-
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    Color.accentColor.opacity(0.4),
-                                    Color.accentColor.opacity(0.15)
+                                    Color.accentColor.opacity(0.5),
+                                    Color.accentColor.opacity(0.2)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
                             ),
-                            lineWidth: 0.5
+                            lineWidth: 1
                         )
-                        .matchedGeometryEffect(id: "selection-border", in: namespace)
-                }
-
-                // Hover state (when not selected)
-                if isHovered && !isSelected {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
                 }
 
                 // App icon
                 Image(nsImage: app.icon)
                     .resizable()
+                    .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 56, height: 56)
-                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    .frame(width: 48, height: 48)
+                    .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 2)
             }
-            .frame(width: 76, height: 76)
+            .frame(width: 64, height: 64)
 
-            // Text area with fixed height to keep icons aligned
-            VStack(spacing: 2) {
-                // App name
+            // App name with window count inline
+            HStack(spacing: 4) {
                 Text(app.name)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? .primary : .secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(maxWidth: 84)
 
-                // Window count badge (or empty space to maintain alignment)
-                Text(app.hasMultipleWindows ? "\(app.windowCount) windows" : " ")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .opacity(app.hasMultipleWindows ? 1 : 0)
+                if app.hasMultipleWindows {
+                    Text("·\(app.windowCount)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
             }
-            .frame(height: 28)  // Fixed height for text area
+            .frame(maxWidth: 76)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(6)
         .contentShape(Rectangle())
-        .scaleEffect(isSelected ? 1.02 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isSelected)
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
             if hovering {
                 onHover?(true)
             }
+        }
+    }
+
+    private var backgroundColor: Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.2)
+        } else if isHovered {
+            return Color.white.opacity(0.08)
+        } else {
+            return Color.clear
         }
     }
 }

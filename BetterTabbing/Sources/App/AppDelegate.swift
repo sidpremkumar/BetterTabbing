@@ -168,6 +168,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .navigateDown:
             // Navigate down in search results (same as selectNext)
             switcherPanel?.selectNext()
+        case .navigateRowUp:
+            // Move to row above in the app grid
+            AppState.shared.selectAppInRowAbove()
+        case .navigateRowDown:
+            // Move to row below in the app grid
+            AppState.shared.selectAppInRowBelow()
         case .quickSwitch:
             // Quick switch to previous app without showing UI
             switcherPanel?.hide()

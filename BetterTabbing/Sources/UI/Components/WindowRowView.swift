@@ -8,61 +8,71 @@ struct WindowRowView: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             // Window icon indicator
             Image(systemName: window.isMinimized ? "minus.rectangle" : "macwindow")
-                .font(.system(size: 14))
+                .font(.system(size: 12))
                 .foregroundStyle(isSelected ? .primary : .secondary)
-                .frame(width: 24, height: 24)
+                .frame(width: 20, height: 20)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 // Window title
                 Text(window.title)
-                    .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                    .font(.system(size: 11, weight: isSelected ? .medium : .regular))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                // Subtitle (URL, file path, etc.)
+                // Subtitle
                 if let subtitle = window.subtitle {
                     Text(subtitle)
-                        .font(.system(size: 10))
+                        .font(.system(size: 9))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
 
-            Spacer(minLength: 0)
-
             // Minimized indicator
             if window.isMinimized {
-                Text("minimized")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 6)
+                Text("min")
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.quaternary)
+                    .padding(.horizontal, 4)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(Color.secondary.opacity(0.2))
+                            .fill(Color.white.opacity(0.08))
                     )
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(minWidth: 200, maxWidth: 300)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.white.opacity(0.05))
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
-            }
-        )
-        .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isSelected)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(minWidth: 150, maxWidth: 260)
+        .background(backgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 8))
         .onHover { hovering in
             isHovered = hovering
             if hovering {
                 onHover?(true)
+            }
+        }
+    }
+
+    private var backgroundColor: some View {
+        Group {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.2))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.accentColor.opacity(0.3), lineWidth: 0.5)
+                    )
+            } else if isHovered {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            } else {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
             }
         }
     }

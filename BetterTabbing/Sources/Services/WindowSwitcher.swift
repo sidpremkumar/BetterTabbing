@@ -18,8 +18,9 @@ final class WindowSwitcher: @unchecked Sendable {
         print("[WindowSwitcher] Activated \(app.name): \(success)")
 
         // Update cache order so next quick switch works correctly (fast, no re-enumeration)
+        // Pass fromOurSwitch=true to suppress the duplicate notification
         if success {
-            WindowCache.shared.moveAppToFront(pid: app.pid)
+            WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
         }
     }
 
@@ -82,8 +83,9 @@ final class WindowSwitcher: @unchecked Sendable {
         print("[WindowSwitcher] Activated \(app.name): \(activated)")
 
         // Update cache order so next quick switch works correctly (fast, no re-enumeration)
+        // Pass fromOurSwitch=true to suppress the duplicate notification
         if activated {
-            WindowCache.shared.moveAppToFront(pid: app.pid)
+            WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
         }
     }
 

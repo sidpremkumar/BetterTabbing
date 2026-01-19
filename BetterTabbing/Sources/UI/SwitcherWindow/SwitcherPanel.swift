@@ -18,6 +18,7 @@ final class SwitcherPanel: NSPanel {
         configure()
         setupHostingView()
         setupNotifications()
+        setupStateObservers()
     }
 
     private func configure() {
@@ -65,6 +66,108 @@ final class SwitcherPanel: NSPanel {
             .store(in: &cancellables)
     }
 
+    private func setupStateObservers() {
+        // Observe search state changes to re-center panel
+        AppState.shared.$isSearchActive
+            .dropFirst()  // Skip initial value
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.recenterIfVisible()
+            }
+            .store(in: &cancellables)
+
+        // Observe search query changes (for search results height)
+        AppState.shared.$searchQuery
+            .dropFirst()
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.recenterIfVisible()
+            }
+            .store(in: &cancellables)
+
+        // Observe selected app changes (for window list)
+        AppState.shared.$selectedAppIndex
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.recenterIfVisible()
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Size Calculation (matches SwitcherView)
+
+    private func calculateCurrentSize() -> CGSize {
+        let appState = AppState.shared
+        let appCount = appState.filteredApplications.count
+        let isSearchActive = appState.isSearchActive
+        let searchQuery = appState.searchQuery
+
+        // Check if showing search results
+        let showSearchResults = isSearchActive && !searchQuery.isEmpty
+
+        // Check if showing window list
+        let selectedApp = appState.selectedApp
+        let showWindowList = !showSearchResults && (selectedApp?.hasMultipleWindows ?? false)
+
+        // Width calculation
+        let width: CGFloat
+        if showSearchResults {
+            width = 480
+        } else {
+            let idealItemsPerRow = min(appCount, 8)
+            let baseWidth = CGFloat(idealItemsPerRow) * 88 + 32
+            width = min(max(baseWidth, 400), 720)
+        }
+
+        // Height calculation
+        let searchBarHeight: CGFloat = isSearchActive ? 54 : 0
+
+        let contentHeight: CGFloat
+        if showSearchResults {
+            let resultCount = min(appState.searchResults.count, 10)
+            let resultsHeight = resultCount == 0 ? 80 : CGFloat(resultCount) * 44 + 24
+            contentHeight = resultsHeight + 14
+        } else {
+            let itemsPerRow = max(1, Int((width - 32) / 88))
+            let rows = appCount > 0 ? ceil(CGFloat(appCount) / CGFloat(itemsPerRow)) : 1
+            let gridHeight = rows * 100 + 28
+            let hintsHeight: CGFloat = 30
+            let windowListHeight: CGFloat = showWindowList ? 70 : 0
+            contentHeight = gridHeight + hintsHeight + windowListHeight
+        }
+
+        return CGSize(width: width, height: searchBarHeight + contentHeight)
+    }
+
+    private func recenterIfVisible() {
+        guard isVisible, let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        let calculatedSize = calculateCurrentSize()
+
+        // Apply screen bounds
+        let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
+        let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
+        let panelSize = CGSize(
+            width: min(calculatedSize.width, maxWidth),
+            height: min(calculatedSize.height, maxHeight)
+        )
+
+        // Center on screen, slightly above center
+        let origin = CGPoint(
+            x: screen.frame.midX - panelSize.width / 2,
+            y: screen.frame.midY - panelSize.height / 2 + 40
+        )
+
+        // Animate the frame change
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            self.animator().setFrame(CGRect(origin: origin, size: panelSize), display: true)
+        }
+    }
+
     // MARK: - Public Methods
 
     /// Show using already-cached data (called after quick-switch timeout)
@@ -85,24 +188,21 @@ final class SwitcherPanel: NSPanel {
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 
-        // Let SwiftUI calculate the content size
-        hostingView?.layoutSubtreeIfNeeded()
+        // Calculate size based on content
+        let calculatedSize = calculateCurrentSize()
 
-        // Get the intrinsic size from the hosting view
-        let fittingSize = hostingView?.fittingSize ?? CGSize(width: 600, height: 400)
-
-        // Apply reasonable bounds
+        // Apply screen bounds
         let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
-        let maxHeight: CGFloat = min(screen.frame.height * 0.8, 700)
+        let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
         let panelSize = CGSize(
-            width: min(max(fittingSize.width, 400), maxWidth),
-            height: min(max(fittingSize.height, 200), maxHeight)
+            width: min(calculatedSize.width, maxWidth),
+            height: min(calculatedSize.height, maxHeight)
         )
 
-        // Center on screen, slightly above center
+        // Center on screen, slightly above center for aesthetic
         let origin = CGPoint(
             x: screen.frame.midX - panelSize.width / 2,
-            y: screen.frame.midY - panelSize.height / 2 + 50
+            y: screen.frame.midY - panelSize.height / 2 + 40
         )
         setFrame(CGRect(origin: origin, size: panelSize), display: true)
 
@@ -114,7 +214,7 @@ final class SwitcherPanel: NSPanel {
         startClickOutsideMonitor()
 
         let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-        print("[SwitcherPanel] Shown in \(Int(elapsed))ms with \(finalApps.count) apps")
+        print("[SwitcherPanel] Shown in \(Int(elapsed))ms with \(finalApps.count) apps, size: \(Int(panelSize.width))x\(Int(panelSize.height))")
     }
 
     /// Legacy show method (forces refresh) - synchronous
@@ -127,24 +227,21 @@ final class SwitcherPanel: NSPanel {
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 
-        // Let SwiftUI calculate the content size
-        hostingView?.layoutSubtreeIfNeeded()
+        // Calculate size based on content
+        let calculatedSize = calculateCurrentSize()
 
-        // Get the intrinsic size from the hosting view
-        let fittingSize = hostingView?.fittingSize ?? CGSize(width: 600, height: 400)
-
-        // Apply reasonable bounds
+        // Apply screen bounds
         let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
-        let maxHeight: CGFloat = min(screen.frame.height * 0.8, 700)
+        let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
         let panelSize = CGSize(
-            width: min(max(fittingSize.width, 400), maxWidth),
-            height: min(max(fittingSize.height, 200), maxHeight)
+            width: min(calculatedSize.width, maxWidth),
+            height: min(calculatedSize.height, maxHeight)
         )
 
         // Center on screen, slightly above center
         let origin = CGPoint(
             x: screen.frame.midX - panelSize.width / 2,
-            y: screen.frame.midY - panelSize.height / 2 + 50
+            y: screen.frame.midY - panelSize.height / 2 + 40
         )
         setFrame(CGRect(origin: origin, size: panelSize), display: true)
 

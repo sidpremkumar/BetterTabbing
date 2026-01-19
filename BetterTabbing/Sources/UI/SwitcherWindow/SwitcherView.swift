@@ -10,9 +10,15 @@ struct SwitcherView: View {
         appState.isSearchActive && !appState.searchQuery.isEmpty
     }
 
+    /// Whether selected app has multiple windows to show
+    private var showWindowList: Bool {
+        guard let selectedApp = appState.selectedApp else { return false }
+        return selectedApp.hasMultipleWindows && !showSearchResults
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar (when active)
+            // Search bar - slides in from top when active
             if appState.isSearchActive {
                 SearchBarView(
                     searchQuery: $appState.searchQuery,
@@ -21,20 +27,18 @@ struct SwitcherView: View {
                         confirmSelection()
                     }
                 )
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
             }
 
             if showSearchResults {
-                // Search results list (shows apps AND specific windows)
+                // Search results list
                 SearchResultsListView(
                     results: appState.searchResults,
                     selectedIndex: appState.selectedSearchIndex,
                     onResultClicked: { index in
                         appState.selectedSearchIndex = index
-                        // Update window index if result targets specific window
                         if let result = appState.selectedSearchResult,
                            let windowIndex = result.targetWindowIndex {
                             appState.selectedWindowIndex = windowIndex
@@ -42,9 +46,9 @@ struct SwitcherView: View {
                         confirmSelection()
                     }
                 )
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+
             } else {
                 // App grid (normal mode)
                 AppGridView(
@@ -57,31 +61,33 @@ struct SwitcherView: View {
                         confirmSelection()
                     },
                     onAppHovered: { index in
-                        // Ignore hover if we're in keyboard navigation mode
                         guard !appState.isKeyboardNavigating else { return }
                         appState.selectedAppIndex = index
                         appState.selectedWindowIndex = 0
                     }
                 )
                 .onContinuousHover { phase in
-                    // Re-enable mouse navigation when mouse moves
                     if case .active = phase {
                         appState.markMouseNavigation()
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
 
-                // Window list for selected app (if it has multiple windows)
-                if let selectedApp = appState.selectedApp, selectedApp.hasMultipleWindows {
+                // Keyboard hints - minimal and sleek
+                keyboardHintsView
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+
+                // Window list expands below when app has multiple windows
+                if showWindowList, let selectedApp = appState.selectedApp {
                     Divider()
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
 
                     WindowListView(
                         app: selectedApp,
                         selectedWindowIndex: appState.selectedWindowIndex,
                         onWindowHovered: { index in
-                            // Ignore hover if we're in keyboard navigation mode
                             guard !appState.isKeyboardNavigating else { return }
                             appState.selectedWindowIndex = index
                         },
@@ -91,49 +97,95 @@ struct SwitcherView: View {
                         }
                     )
                     .onContinuousHover { phase in
-                        // Re-enable mouse navigation when mouse moves
                         if case .active = phase {
                             appState.markMouseNavigation()
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
                 }
             }
-
-            // Keyboard hints
-            keyboardHintsView
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
         }
-        .frame(minWidth: 400, idealWidth: 700, maxWidth: 900)
-        .fixedSize(horizontal: false, vertical: true)  // Let height grow to fit content
-        .background(GlassBackground(cornerRadius: 20))
-        .padding(16)  // Give room for glass effect border/shadow to render without clipping
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: appState.selectedAppIndex)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: appState.selectedSearchIndex)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: appState.isSearchActive)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: appState.searchQuery)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: appState.selectedApp?.hasMultipleWindows)
+        .frame(width: calculateWidth(), height: calculateHeight())
+        .background(GlassBackground(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+        .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
         .onChange(of: appState.isSearchActive) { oldValue, isActive in
             if isActive {
                 isSearchFocused = true
-                appState.selectedSearchIndex = 0  // Reset search selection
+                appState.selectedSearchIndex = 0
             }
         }
         .onChange(of: appState.searchQuery) { oldValue, newValue in
-            appState.selectedSearchIndex = 0  // Reset selection when query changes
+            appState.selectedSearchIndex = 0
         }
     }
 
+    /// Calculate optimal width based on number of apps
+    private func calculateWidth() -> CGFloat {
+        let appCount = appState.filteredApplications.count
+
+        if showSearchResults {
+            return 480  // Fixed width for search results
+        }
+
+        if appState.isSearchActive && appState.searchQuery.isEmpty {
+            // Search mode but no query yet - use app grid width
+            let idealItemsPerRow = min(appCount, 8)
+            let baseWidth = CGFloat(idealItemsPerRow) * 88 + 32
+            return min(max(baseWidth, 400), 720)
+        }
+
+        // Calculate based on app count
+        let idealItemsPerRow = min(appCount, 8)
+        let baseWidth = CGFloat(idealItemsPerRow) * 88 + 32
+
+        return min(max(baseWidth, 400), 720)
+    }
+
+    /// Calculate height based on content
+    private func calculateHeight() -> CGFloat {
+        let appCount = appState.filteredApplications.count
+
+        // Search bar height when active
+        let searchBarHeight: CGFloat = appState.isSearchActive ? 54 : 0
+
+        if showSearchResults {
+            // Search results: header + results + bottom padding
+            let resultCount = min(appState.searchResults.count, 10)
+            let resultsHeight = resultCount == 0 ? 80 : CGFloat(resultCount) * 44 + 24
+            return searchBarHeight + resultsHeight + 14
+        }
+
+        // App grid calculation
+        let itemsPerRow = calculateItemsPerRow()
+        let rows = appCount > 0 ? ceil(CGFloat(appCount) / CGFloat(itemsPerRow)) : 1
+        let gridHeight = rows * 100 + 28  // ~100px per row (64 icon + name + spacing)
+
+        // Keyboard hints
+        let hintsHeight: CGFloat = 30
+
+        // Window list if showing
+        let windowListHeight: CGFloat = showWindowList ? 70 : 0
+
+        return searchBarHeight + gridHeight + hintsHeight + windowListHeight
+    }
+
+    private func calculateItemsPerRow() -> Int {
+        let width = calculateWidth() - 32  // Subtract padding
+        let itemWidth: CGFloat = 88
+        return max(1, Int(width / itemWidth))
+    }
+
     private var keyboardHintsView: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             KeyHint(keys: ["tab"], label: "Next")
             KeyHint(keys: ["`"], label: "Windows")
             KeyHint(keys: ["return"], label: "Search")
-            KeyHint(keys: ["esc"], label: "Cancel")
+            KeyHint(keys: ["esc"], label: "Close")
         }
+        .opacity(0.8)
     }
 
     private func confirmSelection() {
@@ -191,45 +243,18 @@ struct KeyCap: View {
                     .font(.system(size: 9, weight: .semibold, design: .rounded))
             }
         }
-        .foregroundStyle(.primary.opacity(0.7))
-        .frame(minWidth: 20, minHeight: 18)
-        .padding(.horizontal, 5)
+        .foregroundStyle(.primary.opacity(0.6))
+        .frame(minWidth: 18, minHeight: 16)
+        .padding(.horizontal, 4)
         .padding(.vertical, 2)
         .background(
-            ZStack {
-                // Key cap base
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(nsColor: .controlBackgroundColor).opacity(0.9),
-                                Color(nsColor: .controlBackgroundColor).opacity(0.7)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                // Inner highlight
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.5
-                    )
-
-                // Outer shadow/border
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(Color.black.opacity(0.2), lineWidth: 0.5)
-            }
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.white.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                )
         )
-        .shadow(color: .black.opacity(0.15), radius: 1, x: 0, y: 1)
     }
 }
 
@@ -239,7 +264,7 @@ struct KeyHint: View {
     let label: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             HStack(spacing: 2) {
                 ForEach(keys, id: \.self) { key in
                     KeyCap(symbol: key)

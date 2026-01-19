@@ -15,6 +15,10 @@ final class WindowCache: @unchecked Sendable {
     // Track if a prefetch is in progress to avoid duplicate work
     private var prefetchInProgress = false
 
+    // Suppress external activation notifications during our own switches
+    private var suppressExternalActivation = false
+    private var suppressUntil: Date?
+
     private let enumerator = WindowEnumerator()
     private var workspaceObservers: [NSObjectProtocol] = []
 
@@ -45,12 +49,42 @@ final class WindowCache: @unchecked Sendable {
             return cache
         }
 
-        // Enumerate synchronously (this is slow, ~100-200ms)
-        let applications = enumerator.enumerateGroupedByApp()
-        cache = applications
-        lastUpdate = Date()
+        // Capture existing order for MRU preservation
+        let existingOrder = cache.map { $0.pid }
 
-        return applications
+        // Enumerate synchronously (this is slow, ~100-200ms)
+        let freshApplications = enumerator.enumerateGroupedByApp()
+
+        // Merge preserving MRU order
+        if existingOrder.isEmpty {
+            cache = freshApplications
+        } else {
+            var freshByPid: [pid_t: ApplicationModel] = [:]
+            for app in freshApplications {
+                freshByPid[app.pid] = app
+            }
+
+            var result: [ApplicationModel] = []
+            var usedPids: Set<pid_t> = []
+
+            for pid in existingOrder {
+                if let freshApp = freshByPid[pid] {
+                    result.append(freshApp)
+                    usedPids.insert(pid)
+                }
+            }
+
+            for app in freshApplications {
+                if !usedPids.contains(app.pid) {
+                    result.append(app)
+                }
+            }
+
+            cache = result
+        }
+
+        lastUpdate = Date()
+        return cache
     }
 
     /// Async wrapper for compatibility
@@ -60,6 +94,7 @@ final class WindowCache: @unchecked Sendable {
 
     /// Pre-fetch window data - runs enumeration and updates cache
     /// Call this early so data is ready when needed
+    /// IMPORTANT: This preserves MRU order from existing cache
     func prefetch() {
         // Don't start another prefetch if one is already running
         lock.lock()
@@ -68,17 +103,55 @@ final class WindowCache: @unchecked Sendable {
             return
         }
         prefetchInProgress = true
+
+        // Capture existing order BEFORE releasing lock
+        let existingOrder = cache.map { $0.pid }
         lock.unlock()
 
         // Run enumeration (this is the slow part - don't hold lock during this!)
-        let applications = enumerator.enumerateGroupedByApp()
+        let freshApplications = enumerator.enumerateGroupedByApp()
+
+        // Merge: preserve MRU order from existing cache, but use fresh window data
+        let mergedApplications: [ApplicationModel]
+        if existingOrder.isEmpty {
+            // No existing order - use fresh data as-is
+            mergedApplications = freshApplications
+        } else {
+            // Build a lookup of fresh apps by PID
+            var freshByPid: [pid_t: ApplicationModel] = [:]
+            for app in freshApplications {
+                freshByPid[app.pid] = app
+            }
+
+            // Start with apps in existing order (that still exist)
+            var result: [ApplicationModel] = []
+            var usedPids: Set<pid_t> = []
+
+            for pid in existingOrder {
+                if let freshApp = freshByPid[pid] {
+                    result.append(freshApp)
+                    usedPids.insert(pid)
+                }
+            }
+
+            // Add any new apps that weren't in old cache (at the end)
+            for app in freshApplications {
+                if !usedPids.contains(app.pid) {
+                    result.append(app)
+                }
+            }
+
+            mergedApplications = result
+        }
 
         // Update cache atomically
         lock.lock()
-        cache = applications
+        cache = mergedApplications
         lastUpdate = Date()
         prefetchInProgress = false
         lock.unlock()
+
+        print("[WindowCache] Prefetch complete, \(mergedApplications.count) apps, preserved MRU order")
     }
 
     /// Prefetch on background thread - non-blocking
@@ -96,18 +169,29 @@ final class WindowCache: @unchecked Sendable {
 
     /// Move an app to the front of the cache (called after switching to it)
     /// This is much faster than re-enumerating all windows
-    func moveAppToFront(pid: pid_t) {
+    /// Set fromOurSwitch=true when called from WindowSwitcher to suppress duplicate notifications
+    func moveAppToFront(pid: pid_t, fromOurSwitch: Bool = false) {
         lock.lock()
         defer { lock.unlock() }
 
+        // If this is from our own switch, suppress external notifications briefly
+        if fromOurSwitch {
+            suppressExternalActivation = true
+            suppressUntil = Date().addingTimeInterval(0.5)  // 500ms window
+        }
+
         guard let index = cache.firstIndex(where: { $0.pid == pid }) else {
             // App not in cache - invalidate so next fetch gets fresh data
+            print("[WindowCache] moveAppToFront: app PID \(pid) not in cache, invalidating")
             lastUpdate = nil
             return
         }
 
+        let appName = cache[index].name
+
         // Already at front? Just update active state
         if index == 0 {
+            print("[WindowCache] moveAppToFront: \(appName) already at front")
             if !cache.isEmpty && !cache[0].isActive {
                 cache[0] = ApplicationModel(
                     pid: cache[0].pid,
@@ -136,6 +220,23 @@ final class WindowCache: @unchecked Sendable {
                 isActive: i == 0
             )
         }
+
+        // Log the new order (top 5 apps)
+        let topApps = cache.prefix(5).map { $0.name }.joined(separator: " > ")
+        print("[WindowCache] moveAppToFront: \(appName) moved from index \(index) to front. Order: \(topApps)")
+    }
+
+    /// Check if external activation should be suppressed (called from notification handler)
+    private func shouldSuppressExternalActivation() -> Bool {
+        if suppressExternalActivation {
+            if let until = suppressUntil, Date() < until {
+                return true
+            }
+            // Suppression expired
+            suppressExternalActivation = false
+            suppressUntil = nil
+        }
+        return false
     }
 
     func startMonitoring() {
@@ -148,9 +249,19 @@ final class WindowCache: @unchecked Sendable {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            // When an app is activated (by any means), move it to front of our cache
+            guard let self = self else { return }
+
+            // Skip if we're suppressing (our own switch just happened)
+            if self.shouldSuppressExternalActivation() {
+                if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+                    print("[WindowCache] Ignoring our own activation: \(app.localizedName ?? "unknown")")
+                }
+                return
+            }
+
+            // When an app is activated externally, move it to front of our cache
             if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
-                self?.moveAppToFront(pid: app.processIdentifier)
+                self.moveAppToFront(pid: app.processIdentifier, fromOurSwitch: false)
                 print("[WindowCache] App activated externally: \(app.localizedName ?? "unknown")")
             }
         }

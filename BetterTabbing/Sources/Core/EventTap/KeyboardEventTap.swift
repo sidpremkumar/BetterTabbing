@@ -14,6 +14,8 @@ enum ShortcutEvent {
     case dismiss
     case navigateUp      // Arrow up in search mode
     case navigateDown    // Arrow down in search mode
+    case navigateRowUp   // Arrow up in normal mode - move to row above
+    case navigateRowDown // Arrow down in normal mode - move to row below
     case quickSwitch     // Quick CMD+TAB to previous app (no UI)
 }
 
@@ -261,8 +263,8 @@ final class KeyboardEventTap {
                     return nil
                 }
             } else {
-                // In normal mode: arrow keys navigate apps and windows
-                // Left/Right = cycle through apps
+                // In normal mode: arrow keys navigate the app grid
+                // Left/Right = cycle through apps (linear)
                 if keyCode == UInt16(kVK_LeftArrow) {
                     hadInteractionSinceActivation = true
                     print("[KeyboardEventTap] Left arrow = previous app")
@@ -277,18 +279,18 @@ final class KeyboardEventTap {
                     return nil
                 }
 
-                // Up/Down = cycle through windows within selected app
+                // Up/Down = move to row above/below in the grid
                 if keyCode == UInt16(kVK_UpArrow) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Up arrow = previous window")
-                    onShortcutTriggered.send(.cycleWindowPrevious)
+                    print("[KeyboardEventTap] Up arrow = row above")
+                    onShortcutTriggered.send(.navigateRowUp)
                     return nil
                 }
 
                 if keyCode == UInt16(kVK_DownArrow) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Down arrow = next window")
-                    onShortcutTriggered.send(.cycleWindowNext)
+                    print("[KeyboardEventTap] Down arrow = row below")
+                    onShortcutTriggered.send(.navigateRowDown)
                     return nil
                 }
             }
