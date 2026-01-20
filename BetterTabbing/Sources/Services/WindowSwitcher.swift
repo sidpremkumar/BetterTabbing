@@ -22,9 +22,28 @@ final class WindowSwitcher: @unchecked Sendable {
         let axApp = AXUIElementCreateApplication(app.pid)
         var windowsRef: CFTypeRef?
         var firstWindow: AXUIElement?
-        if AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
-           let windows = windowsRef as? [AXUIElement],
-           let window = windows.first {
+        let axResult = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
+        let axWindows = (axResult == .success) ? (windowsRef as? [AXUIElement]) ?? [] : []
+
+        // If app has no windows, open a new one instead of just activating
+        if axWindows.isEmpty, let bundleURL = runningApp.bundleURL {
+            print("[WindowSwitcher] App \(app.name) has no windows, opening new window")
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            config.createsNewApplicationInstance = false
+
+            NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, error in
+                if let error = error {
+                    print("[WindowSwitcher] Failed to open new window for \(app.name): \(error)")
+                } else {
+                    print("[WindowSwitcher] Successfully opened new window for \(app.name)")
+                }
+            }
+            WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
+            return
+        }
+
+        if let window = axWindows.first {
             firstWindow = window
             AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         }
@@ -85,6 +104,24 @@ final class WindowSwitcher: @unchecked Sendable {
         }
 
         let axWindows = AXWindowHelper.getOrderedAXWindows(for: app.pid)
+
+        // If app has no windows, open a new one instead of trying to switch
+        if axWindows.isEmpty, let bundleURL = runningApp.bundleURL {
+            print("[WindowSwitcher] App \(app.name) has no windows, opening new window")
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            config.createsNewApplicationInstance = false
+
+            NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, error in
+                if let error = error {
+                    print("[WindowSwitcher] Failed to open new window for \(app.name): \(error)")
+                } else {
+                    print("[WindowSwitcher] Successfully opened new window for \(app.name)")
+                }
+            }
+            WindowCache.shared.moveAppToFront(pid: app.pid, fromOurSwitch: true)
+            return
+        }
 
         // Strategy 1: Try to find by window index (most reliable since we enumerate in AX order)
         if let index = windowIndex, index < axWindows.count {

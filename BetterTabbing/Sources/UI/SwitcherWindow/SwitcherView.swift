@@ -30,6 +30,7 @@ struct SwitcherView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
                 .padding(.bottom, 10)
+                .transition(.opacity.animation(.easeOut(duration: 0.15)))
             }
 
             if showSearchResults {
@@ -50,7 +51,7 @@ struct SwitcherView: View {
                 .padding(.bottom, 14)
 
             } else {
-                // App grid (normal mode)
+                // App grid (normal mode) - explicitly disable animation on grid content
                 AppGridView(
                     applications: appState.filteredApplications,
                     selectedIndex: appState.selectedAppIndex,
@@ -61,14 +62,15 @@ struct SwitcherView: View {
                         confirmSelection()
                     },
                     onAppHovered: { index in
-                        guard !appState.isKeyboardNavigating else { return }
+                        guard appState.shouldProcessMouseInput else { return }
                         appState.selectedAppIndex = index
                         appState.selectedWindowIndex = 0
                     }
                 )
                 .onContinuousHover { phase in
                     if case .active = phase {
-                        appState.markMouseNavigation()
+                        // Use screen mouse position for tracking actual movement
+                        appState.markMouseNavigation(at: NSEvent.mouseLocation)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -81,36 +83,38 @@ struct SwitcherView: View {
 
                 // Window list expands below when app has multiple windows
                 if showWindowList, let selectedApp = appState.selectedApp {
-                    Divider()
-                        .padding(.horizontal, 16)
+                    VStack(spacing: 0) {
+                        Divider()
+                            .padding(.horizontal, 16)
 
-                    WindowListView(
-                        app: selectedApp,
-                        selectedWindowIndex: appState.selectedWindowIndex,
-                        onWindowHovered: { index in
-                            guard !appState.isKeyboardNavigating else { return }
-                            appState.selectedWindowIndex = index
-                        },
-                        onWindowClicked: { index in
-                            appState.selectedWindowIndex = index
-                            confirmSelection()
+                        WindowListView(
+                            app: selectedApp,
+                            selectedWindowIndex: appState.selectedWindowIndex,
+                            onWindowHovered: { index in
+                                guard appState.shouldProcessMouseInput else { return }
+                                appState.selectedWindowIndex = index
+                            },
+                            onWindowClicked: { index in
+                                appState.selectedWindowIndex = index
+                                confirmSelection()
+                            }
+                        )
+                        .onContinuousHover { phase in
+                            if case .active = phase {
+                                appState.markMouseNavigation(at: NSEvent.mouseLocation)
+                            }
                         }
-                    )
-                    .onContinuousHover { phase in
-                        if case .active = phase {
-                            appState.markMouseNavigation()
-                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .transition(.opacity.animation(.easeOut(duration: 0.15)))
                 }
             }
         }
-        .frame(width: calculateWidth(), height: calculateHeight())
+        .frame(width: calculateWidth())
+        .fixedSize(horizontal: false, vertical: true)  // Let height be determined by content
         .background(GlassBackground(cornerRadius: 16))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
-        .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
         .onChange(of: appState.isSearchActive) { oldValue, isActive in
             if isActive {
                 isSearchFocused = true
@@ -159,9 +163,13 @@ struct SwitcherView: View {
         }
 
         // App grid calculation
+        // Each tile: 64px icon + 6px spacing + ~14px text + 12px padding = ~96px
+        // Grid spacing: 6px between rows
         let itemsPerRow = calculateItemsPerRow()
         let rows = appCount > 0 ? ceil(CGFloat(appCount) / CGFloat(itemsPerRow)) : 1
-        let gridHeight = rows * 100 + 28  // ~100px per row (64 icon + name + spacing)
+        let tileHeight: CGFloat = 96
+        let gridSpacing: CGFloat = 6
+        let gridHeight = rows * tileHeight + (rows - 1) * gridSpacing + 28  // +28 for vertical padding on grid
 
         // Keyboard hints
         let hintsHeight: CGFloat = 30

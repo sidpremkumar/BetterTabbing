@@ -15,6 +15,8 @@ final class AppState: ObservableObject {
     @Published var searchQuery = ""
     @Published var selectedSearchIndex = 0  // Index into search results
     @Published var isKeyboardNavigating = false  // When true, ignore mouse hover
+    @Published var hasMouseMoved = false  // Whether mouse has actually moved since panel appeared
+    var lastMousePosition: CGPoint? = nil  // Track last mouse position to detect actual movement
 
     // MARK: - Preferences
 
@@ -60,8 +62,34 @@ final class AppState: ObservableObject {
     }
 
     /// Call this when mouse moves to re-enable hover
-    func markMouseNavigation() {
-        isKeyboardNavigating = false
+    /// Only marks mouse navigation if the mouse has actually moved from its last position
+    func markMouseNavigation(at position: CGPoint? = nil) {
+        // If position provided, check if mouse actually moved
+        if let position = position {
+            if let lastPos = lastMousePosition {
+                // Only consider it a move if position changed by more than 2 pixels
+                let dx = abs(position.x - lastPos.x)
+                let dy = abs(position.y - lastPos.y)
+                if dx > 2 || dy > 2 {
+                    hasMouseMoved = true
+                    isKeyboardNavigating = false
+                    lastMousePosition = position
+                }
+            } else {
+                // First position recorded, don't count as movement yet
+                lastMousePosition = position
+            }
+        } else {
+            // No position provided, only enable if mouse has already moved
+            if hasMouseMoved {
+                isKeyboardNavigating = false
+            }
+        }
+    }
+
+    /// Check if mouse input should be processed (mouse has moved since panel appeared)
+    var shouldProcessMouseInput: Bool {
+        return hasMouseMoved && !isKeyboardNavigating
     }
 
     func selectNextApp() {
@@ -182,6 +210,8 @@ final class AppState: ObservableObject {
         isSearchActive = false
         searchQuery = ""
         isKeyboardNavigating = false
+        hasMouseMoved = false
+        lastMousePosition = nil
     }
 
     private init() {}

@@ -7,6 +7,9 @@ final class SwitcherPanel: NSPanel {
     private var cancellables = Set<AnyCancellable>()
     private var clickOutsideMonitor: Any?
 
+    /// The Y position of the top of the app grid (used to anchor expansions)
+    private var gridTopY: CGFloat = 0
+
     init() {
         super.init(
             contentRect: .zero,
@@ -28,7 +31,7 @@ final class SwitcherPanel: NSPanel {
         // Appearance
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = false  // Shadow is handled by SwiftUI view
+        hasShadow = true  // Use native macOS window shadow
 
         // Behavior
         isFloatingPanel = true
@@ -92,12 +95,12 @@ final class SwitcherPanel: NSPanel {
             }
             .store(in: &cancellables)
 
-        // Observe selected app changes (for window list)
+        // Observe selected app changes (for window list) - resize without animation
         AppState.shared.$selectedAppIndex
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.recenterIfVisible()
+                self?.resizeForWindowList()
             }
             .store(in: &cancellables)
     }
@@ -136,34 +139,42 @@ final class SwitcherPanel: NSPanel {
             let resultsHeight = resultCount == 0 ? 80 : CGFloat(resultCount) * 44 + 24
             contentHeight = resultsHeight + 14
         } else {
+            // Each tile: 64px icon + 6px spacing + ~14px text + 12px padding = ~96px
+            // Grid spacing: 6px between rows
             let itemsPerRow = max(1, Int((width - 32) / 88))
             let rows = appCount > 0 ? ceil(CGFloat(appCount) / CGFloat(itemsPerRow)) : 1
-            let gridHeight = rows * 100 + 28
+            let tileHeight: CGFloat = 96
+            let gridSpacing: CGFloat = 6
+            let gridHeight = rows * tileHeight + (rows - 1) * gridSpacing + 28  // +28 for vertical padding
             let hintsHeight: CGFloat = 30
             let windowListHeight: CGFloat = showWindowList ? 70 : 0
             contentHeight = gridHeight + hintsHeight + windowListHeight
         }
 
+        // No extra padding needed - native NSPanel shadow extends beyond frame automatically
         return CGSize(width: width, height: searchBarHeight + contentHeight)
     }
 
     private func recenterIfVisible() {
         guard isVisible, let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
-        let calculatedSize = calculateCurrentSize()
+        // Get the intrinsic size from SwiftUI content
+        let fittingSize = hostingView?.fittingSize ?? calculateCurrentSize()
 
         // Apply screen bounds
         let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
         let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
         let panelSize = CGSize(
-            width: min(calculatedSize.width, maxWidth),
-            height: min(calculatedSize.height, maxHeight)
+            width: min(fittingSize.width, maxWidth),
+            height: min(fittingSize.height, maxHeight)
         )
 
-        // Center on screen, slightly above center
+        // Keep the top of the grid anchored - the panel grows/shrinks from the top
+        // When search bar appears, panel grows upward (top goes up)
+        // The grid stays at gridTopY
         let origin = CGPoint(
             x: screen.frame.midX - panelSize.width / 2,
-            y: screen.frame.midY - panelSize.height / 2 + 40
+            y: gridTopY - panelSize.height  // Anchor to the stored grid top position
         )
 
         let newFrame = CGRect(origin: origin, size: panelSize)
@@ -173,13 +184,39 @@ final class SwitcherPanel: NSPanel {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.isVisible else { return }
 
-            // Animate the frame change
+            // Animate the frame change for search bar
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.15
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 self.animator().setFrame(newFrame, display: true)
             }
         }
+    }
+
+    /// Resize panel for window list without animation - keeps top anchored, grows downward instantly
+    private func resizeForWindowList() {
+        guard isVisible, let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        // Get the intrinsic size from SwiftUI content
+        let fittingSize = hostingView?.fittingSize ?? calculateCurrentSize()
+
+        // Apply screen bounds
+        let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
+        let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
+        let panelSize = CGSize(
+            width: min(fittingSize.width, maxWidth),
+            height: min(fittingSize.height, maxHeight)
+        )
+
+        // Keep top anchored - only the bottom changes
+        let currentTop = frame.origin.y + frame.size.height
+        let origin = CGPoint(
+            x: screen.frame.midX - panelSize.width / 2,
+            y: currentTop - panelSize.height  // Keep top fixed, grow downward
+        )
+
+        // Set frame instantly (no animation) - SwiftUI will animate the content
+        setFrame(CGRect(origin: origin, size: panelSize), display: true)
     }
 
     // MARK: - Public Methods
@@ -202,15 +239,15 @@ final class SwitcherPanel: NSPanel {
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 
-        // Calculate size based on content
-        let calculatedSize = calculateCurrentSize()
+        // Get the intrinsic size from SwiftUI content
+        let fittingSize = hostingView?.fittingSize ?? calculateCurrentSize()
 
         // Apply screen bounds
         let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
         let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
         let panelSize = CGSize(
-            width: min(calculatedSize.width, maxWidth),
-            height: min(calculatedSize.height, maxHeight)
+            width: min(fittingSize.width, maxWidth),
+            height: min(fittingSize.height, maxHeight)
         )
 
         // Center on screen, slightly above center for aesthetic
@@ -219,6 +256,9 @@ final class SwitcherPanel: NSPanel {
             y: screen.frame.midY - panelSize.height / 2 + 40
         )
         setFrame(CGRect(origin: origin, size: panelSize), display: true)
+
+        // Store the top of the grid as anchor point (top of panel since no search bar initially)
+        gridTopY = origin.y + panelSize.height
 
         // Show instantly (no fade for speed)
         alphaValue = 1
@@ -241,15 +281,15 @@ final class SwitcherPanel: NSPanel {
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 
-        // Calculate size based on content
-        let calculatedSize = calculateCurrentSize()
+        // Get the intrinsic size from SwiftUI content
+        let fittingSize = hostingView?.fittingSize ?? calculateCurrentSize()
 
         // Apply screen bounds
         let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
         let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
         let panelSize = CGSize(
-            width: min(calculatedSize.width, maxWidth),
-            height: min(calculatedSize.height, maxHeight)
+            width: min(fittingSize.width, maxWidth),
+            height: min(fittingSize.height, maxHeight)
         )
 
         // Center on screen, slightly above center
@@ -259,13 +299,16 @@ final class SwitcherPanel: NSPanel {
         )
         setFrame(CGRect(origin: origin, size: panelSize), display: true)
 
+        // Store the top of the grid as anchor point (top of panel since no search bar initially)
+        gridTopY = origin.y + panelSize.height
+
         // Show instantly
         alphaValue = 1
         makeKeyAndOrderFront(nil)
 
         // Start monitoring for clicks outside the panel
         startClickOutsideMonitor()
-        print("[SwitcherPanel] Shown")
+        print("[SwitcherPanel] Shown with size: \(Int(panelSize.width))x\(Int(panelSize.height))")
     }
 
     func hide() {
