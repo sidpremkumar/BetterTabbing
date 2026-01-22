@@ -17,6 +17,9 @@ struct UserPreferences: Codable {
     // Launch
     var launchAtLogin: Bool = false
 
+    // Excluded Apps
+    var excludedBundleIDs: [String] = []
+
     enum Theme: String, Codable, CaseIterable {
         case system
         case light

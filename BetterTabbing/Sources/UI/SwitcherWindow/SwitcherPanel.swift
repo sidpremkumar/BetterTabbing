@@ -235,7 +235,8 @@ final class SwitcherPanel: NSPanel {
         let finalApps = apps.isEmpty ? WindowCache.shared.getApplicationsSync(forceRefresh: true) : apps
 
         AppState.shared.applications = finalApps
-        AppState.shared.selectedAppIndex = 0
+        // Select index 1 (previous app) by default, since index 0 is the current frontmost app
+        AppState.shared.selectedAppIndex = finalApps.count > 1 ? 1 : 0
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 
@@ -277,7 +278,8 @@ final class SwitcherPanel: NSPanel {
 
         let apps = WindowCache.shared.getApplicationsSync(forceRefresh: true)
         AppState.shared.applications = apps
-        AppState.shared.selectedAppIndex = 0
+        // Select index 1 (previous app) by default, since index 0 is the current frontmost app
+        AppState.shared.selectedAppIndex = apps.count > 1 ? 1 : 0
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 

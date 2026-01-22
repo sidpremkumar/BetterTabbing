@@ -65,6 +65,11 @@ struct PreferencesView: View {
                     Label("General", systemImage: "gear")
                 }
 
+            ExcludedAppsSettingsView()
+                .tabItem {
+                    Label("Excluded Apps", systemImage: "eye.slash")
+                }
+
             ShortcutSettingsView()
                 .tabItem {
                     Label("Shortcuts", systemImage: "keyboard")
@@ -75,7 +80,7 @@ struct PreferencesView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 450, height: 350)
         .environmentObject(appState)
     }
 }
@@ -154,6 +159,77 @@ struct KeyboardShortcutRow: View {
                 .foregroundStyle(.secondary)
                 .font(.system(.body, design: .monospaced))
         }
+    }
+}
+
+struct ExcludedAppsSettingsView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var runningApps: [(name: String, bundleID: String, icon: NSImage)] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Excluded apps will not appear in the switcher.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            List {
+                ForEach(runningApps, id: \.bundleID) { app in
+                    let isExcluded = appState.preferences.excludedBundleIDs.contains(app.bundleID)
+                    HStack(spacing: 10) {
+                        Image(nsImage: app.icon)
+                            .resizable()
+                            .frame(width: 20, height: 20)
+                        Text(app.name)
+                            .lineLimit(1)
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { isExcluded },
+                            set: { exclude in
+                                if exclude {
+                                    appState.preferences.excludedBundleIDs.append(app.bundleID)
+                                } else {
+                                    appState.preferences.excludedBundleIDs.removeAll { $0 == app.bundleID }
+                                }
+                                WindowCache.shared.invalidate()
+                                WindowCache.shared.prefetchAsync()
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+        .onAppear {
+            loadRunningApps()
+        }
+    }
+
+    private func loadRunningApps() {
+        let apps = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier }
+            .compactMap { app -> (name: String, bundleID: String, icon: NSImage)? in
+                guard let name = app.localizedName,
+                      let bundleID = app.bundleIdentifier else { return nil }
+                let icon = app.icon ?? NSImage(named: NSImage.applicationIconName) ?? NSImage()
+                return (name: name, bundleID: bundleID, icon: icon)
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        // Include currently excluded apps that aren't running (so user can un-exclude them)
+        var result = apps
+        for bundleID in appState.preferences.excludedBundleIDs {
+            if !result.contains(where: { $0.bundleID == bundleID }) {
+                let name = bundleID.components(separatedBy: ".").last ?? bundleID
+                result.append((name: name, bundleID: bundleID, icon: NSImage(named: NSImage.applicationIconName) ?? NSImage()))
+            }
+        }
+
+        runningApps = result
     }
 }
 

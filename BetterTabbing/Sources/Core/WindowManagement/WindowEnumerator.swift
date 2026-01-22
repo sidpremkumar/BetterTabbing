@@ -24,10 +24,14 @@ final class WindowEnumerator {
     /// Enumerate windows using Accessibility API as the primary source
     /// This is more reliable for window switching since we use AX to raise windows
     func enumerateGroupedByApp(options: EnumerationOptions = .default) -> [ApplicationModel] {
+        let excludedBundleIDs = Set(UserPreferences.load().excludedBundleIDs)
+
         // Get all running apps with regular activation policy (visible in Dock)
         let runningApps = NSWorkspace.shared.runningApplications.filter { app in
             guard let bundleID = app.bundleIdentifier else { return false }
-            return app.activationPolicy == .regular && !skipBundleIDs.contains(bundleID)
+            return app.activationPolicy == .regular
+                && !skipBundleIDs.contains(bundleID)
+                && !excludedBundleIDs.contains(bundleID)
         }
 
         var applications: [ApplicationModel] = []

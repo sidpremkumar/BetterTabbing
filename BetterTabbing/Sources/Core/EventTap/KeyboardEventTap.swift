@@ -213,6 +213,24 @@ final class KeyboardEventTap {
                 return nil
             }
 
+            // Q/E = cycle windows within selected app (handle early to intercept CMD+Q)
+            // Only when not in search mode (so user can type these letters)
+            if !searchModeActive {
+                if keyCode == UInt16(kVK_ANSI_Q) {
+                    hadInteractionSinceActivation = true
+                    print("[KeyboardEventTap] Q = previous window")
+                    onShortcutTriggered.send(.cycleWindowPrevious)
+                    return nil
+                }
+
+                if keyCode == UInt16(kVK_ANSI_E) {
+                    hadInteractionSinceActivation = true
+                    print("[KeyboardEventTap] E = next window")
+                    onShortcutTriggered.send(.cycleWindowNext)
+                    return nil
+                }
+            }
+
             // Enter = activate search OR confirm selection (in search mode)
             if keyCode == UInt16(kVK_Return) {
                 hadInteractionSinceActivation = true
@@ -233,9 +251,9 @@ final class KeyboardEventTap {
                 return nil
             }
 
-            // Arrow keys for navigation
+            // Arrow keys for navigation (WSAD only in normal mode so user can type in search)
             if searchModeActive {
-                // In search mode: up/down/left/right all navigate results
+                // In search mode: only arrow keys navigate results (WSAD passed through for typing)
                 if keyCode == UInt16(kVK_UpArrow) || keyCode == UInt16(kVK_LeftArrow) {
                     hadInteractionSinceActivation = true
                     print("[KeyboardEventTap] Navigate up (search)")
@@ -263,33 +281,33 @@ final class KeyboardEventTap {
                     return nil
                 }
             } else {
-                // In normal mode: arrow keys navigate the app grid
-                // Left/Right = cycle through apps (linear)
-                if keyCode == UInt16(kVK_LeftArrow) {
+                // In normal mode: arrow keys and WSAD navigate the app grid
+                // Left/Right (A/D) = cycle through apps (linear)
+                if keyCode == UInt16(kVK_LeftArrow) || keyCode == UInt16(kVK_ANSI_A) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Left arrow = previous app")
+                    print("[KeyboardEventTap] Left/A = previous app")
                     onShortcutTriggered.send(.cyclePrevious)
                     return nil
                 }
 
-                if keyCode == UInt16(kVK_RightArrow) {
+                if keyCode == UInt16(kVK_RightArrow) || keyCode == UInt16(kVK_ANSI_D) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Right arrow = next app")
+                    print("[KeyboardEventTap] Right/D = next app")
                     onShortcutTriggered.send(.cycleNext)
                     return nil
                 }
 
-                // Up/Down = move to row above/below in the grid
-                if keyCode == UInt16(kVK_UpArrow) {
+                // Up/Down (W/S) = move to row above/below in the grid
+                if keyCode == UInt16(kVK_UpArrow) || keyCode == UInt16(kVK_ANSI_W) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Up arrow = row above")
+                    print("[KeyboardEventTap] Up/W = row above")
                     onShortcutTriggered.send(.navigateRowUp)
                     return nil
                 }
 
-                if keyCode == UInt16(kVK_DownArrow) {
+                if keyCode == UInt16(kVK_DownArrow) || keyCode == UInt16(kVK_ANSI_S) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Down arrow = row below")
+                    print("[KeyboardEventTap] Down/S = row below")
                     onShortcutTriggered.send(.navigateRowDown)
                     return nil
                 }
