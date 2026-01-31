@@ -5,7 +5,7 @@ import Combine
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var eventTap: KeyboardEventTap?
-    private var switcherPanel: SwitcherPanel?
+    private var panelManager: SwitcherPanelManager { SwitcherPanelManager.shared }
     private var preferencesWindow: NSWindow?
     private var cancellables = Set<AnyCancellable>()
 
@@ -24,8 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Initialize event tap
         setupEventTap()
 
-        // Create switcher panel (hidden initially)
-        switcherPanel = SwitcherPanel()
+        // Panel manager is a lazy singleton - will create panels on first show
 
         // Pre-warm the cache on startup so first activation is fast
         WindowCache.shared.prefetchAsync()
@@ -143,31 +142,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Pre-fetch window data on background thread (non-blocking)
             WindowCache.shared.prefetchAsync()
         case .showSwitcher:
-            switcherPanel?.showWithCachedData()
+            panelManager.showWithCachedData()
             eventTap?.setSwitcherVisible(true)
         case .cycleNext:
-            switcherPanel?.selectNext()
+            panelManager.selectNext()
         case .cyclePrevious:
-            switcherPanel?.selectPrevious()
+            panelManager.selectPrevious()
         case .cycleWindowNext:
-            switcherPanel?.selectNextWindow()
+            panelManager.selectNextWindow()
         case .cycleWindowPrevious:
-            switcherPanel?.selectPreviousWindow()
+            panelManager.selectPreviousWindow()
         case .activateSearch:
-            switcherPanel?.activateSearch()
+            panelManager.activateSearch()
             eventTap?.setSearchModeActive(true)
         case .confirm:
-            switcherPanel?.confirmSelection()
+            panelManager.confirmSelection()
             eventTap?.setSwitcherVisible(false)
         case .dismiss:
-            switcherPanel?.hide()
+            panelManager.hide()
             eventTap?.setSwitcherVisible(false)
         case .navigateUp:
             // Navigate up in search results (same as selectPrevious)
-            switcherPanel?.selectPrevious()
+            panelManager.selectPrevious()
         case .navigateDown:
             // Navigate down in search results (same as selectNext)
-            switcherPanel?.selectNext()
+            panelManager.selectNext()
         case .navigateRowUp:
             // Move to row above in the app grid
             AppState.shared.selectAppInRowAbove()
@@ -176,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.selectAppInRowBelow()
         case .quickSwitch:
             // Quick switch to previous app without showing UI
-            switcherPanel?.hide()
+            panelManager.hide()
             eventTap?.setSwitcherVisible(false)
             performQuickSwitch()
         }

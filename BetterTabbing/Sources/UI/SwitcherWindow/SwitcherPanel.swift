@@ -10,7 +10,11 @@ final class SwitcherPanel: NSPanel {
     /// The Y position of the top of the app grid (used to anchor expansions)
     private var gridTopY: CGFloat = 0
 
-    init() {
+    /// The screen this panel is associated with (for multi-screen support)
+    private(set) var associatedScreen: NSScreen?
+
+    init(screen: NSScreen? = nil) {
+        self.associatedScreen = screen
         super.init(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -22,6 +26,11 @@ final class SwitcherPanel: NSPanel {
         setupHostingView()
         setupNotifications()
         setupStateObservers()
+    }
+
+    /// Update the associated screen (used when screen configuration changes)
+    func updateAssociatedScreen(_ screen: NSScreen) {
+        self.associatedScreen = screen
     }
 
     private func configure() {
@@ -156,7 +165,7 @@ final class SwitcherPanel: NSPanel {
     }
 
     private func recenterIfVisible() {
-        guard isVisible, let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard isVisible, let screen = associatedScreen ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
         // Get the intrinsic size from SwiftUI content
         let fittingSize = hostingView?.fittingSize ?? calculateCurrentSize()
@@ -195,7 +204,7 @@ final class SwitcherPanel: NSPanel {
 
     /// Resize panel for window list without animation - keeps top anchored, grows downward instantly
     private func resizeForWindowList() {
-        guard isVisible, let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard isVisible, let screen = associatedScreen ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
         // Get the intrinsic size from SwiftUI content
         let fittingSize = hostingView?.fittingSize ?? calculateCurrentSize()
@@ -224,7 +233,7 @@ final class SwitcherPanel: NSPanel {
     /// Show using already-cached data (called after quick-switch timeout)
     /// This is fully synchronous for maximum speed - uses lock-free cache read
     func showWithCachedData() {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard let screen = associatedScreen ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -274,7 +283,7 @@ final class SwitcherPanel: NSPanel {
 
     /// Legacy show method (forces refresh) - synchronous
     func show() {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        guard let screen = associatedScreen ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
         let apps = WindowCache.shared.getApplicationsSync(forceRefresh: true)
         AppState.shared.applications = apps
@@ -313,6 +322,61 @@ final class SwitcherPanel: NSPanel {
         print("[SwitcherPanel] Shown with size: \(Int(panelSize.width))x\(Int(panelSize.height))")
     }
 
+    /// Show panel on its associated screen (used by SwitcherPanelManager for multi-screen display)
+    /// - Parameter skipStateUpdate: If true, assumes AppState is already updated by the manager
+    func showOnScreen(skipStateUpdate: Bool = false) {
+        guard let screen = associatedScreen ?? NSScreen.main ?? NSScreen.screens.first else { return }
+
+        if !skipStateUpdate {
+            let apps = WindowCache.shared.getCachedApplications()
+            let finalApps = apps.isEmpty ? WindowCache.shared.getApplicationsSync(forceRefresh: true) : apps
+            AppState.shared.applications = finalApps
+            AppState.shared.selectedAppIndex = finalApps.count > 1 ? 1 : 0
+            AppState.shared.selectedWindowIndex = 0
+            AppState.shared.isVisible = true
+        }
+
+        // Get the intrinsic size from SwiftUI content
+        let fittingSize = hostingView?.fittingSize ?? calculateCurrentSize()
+
+        // Apply screen bounds
+        let maxWidth: CGFloat = min(screen.frame.width * 0.9, 900)
+        let maxHeight: CGFloat = min(screen.frame.height * 0.85, 800)
+        let panelSize = CGSize(
+            width: min(fittingSize.width, maxWidth),
+            height: min(fittingSize.height, maxHeight)
+        )
+
+        // Center on screen, slightly above center for aesthetic
+        let origin = CGPoint(
+            x: screen.frame.midX - panelSize.width / 2,
+            y: screen.frame.midY - panelSize.height / 2 + 40
+        )
+        setFrame(CGRect(origin: origin, size: panelSize), display: true)
+
+        // Store the top of the grid as anchor point
+        gridTopY = origin.y + panelSize.height
+
+        // Show instantly
+        alphaValue = 1
+        makeKeyAndOrderFront(nil)
+
+        // Start monitoring for clicks outside (posts notification for manager to handle)
+        startClickOutsideMonitor()
+    }
+
+    /// Recenter on the associated screen (called when screen configuration changes)
+    func recenterOnAssociatedScreen() {
+        recenterIfVisible()
+    }
+
+    /// Hide the panel without resetting AppState (used by manager)
+    func hidePanel() {
+        stopClickOutsideMonitor()
+        alphaValue = 0
+        orderOut(nil)
+    }
+
     func hide() {
         // Stop monitoring clicks
         stopClickOutsideMonitor()
@@ -327,20 +391,19 @@ final class SwitcherPanel: NSPanel {
 
     private func startClickOutsideMonitor() {
         // Monitor for mouse clicks outside the panel
+        // Posts notification so SwitcherPanelManager can check ALL panels before dismissing
         clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self = self, self.isVisible else { return }
 
-            // Check if the click is outside this panel
             let screenLocation = NSEvent.mouseLocation
-            let panelFrame = self.frame
 
-            if !panelFrame.contains(screenLocation) {
-                print("[SwitcherPanel] Click outside detected, dismissing")
-                DispatchQueue.main.async {
-                    // Notify the event tap that we're dismissing
-                    NotificationCenter.default.post(name: .switcherDismissedByClickOutside, object: nil)
-                    self.hide()
-                }
+            // Post notification with click location - manager will check all panels
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .clickOutsideDetected,
+                    object: nil,
+                    userInfo: ["location": screenLocation]
+                )
             }
         }
     }
