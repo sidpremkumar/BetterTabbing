@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Combine
 
 @MainActor
@@ -17,6 +18,15 @@ final class AppState: ObservableObject {
     @Published var isKeyboardNavigating = false  // When true, ignore mouse hover
     @Published var hasMouseMoved = false  // Whether mouse has actually moved since panel appeared
     var lastMousePosition: CGPoint? = nil  // Track last mouse position to detect actual movement
+
+    // MARK: - Quit Hold State
+
+    @Published var isQuitHoldActive = false
+    @Published var quitHoldProgress: CGFloat = 0.0
+    @Published var quitTargetAppIndex: Int? = nil
+    private var quitHoldTimer: Timer?
+    private var quitHoldStartTime: Date?
+    private let quitHoldDuration: TimeInterval = 2.0
 
     // MARK: - Preferences
 
@@ -202,7 +212,75 @@ final class AppState: ObservableObject {
         return max(1, Int(contentWidth / itemWidth))
     }
 
+    // MARK: - Quit Hold Methods
+
+    func startQuitHold() {
+        guard selectedApp != nil else { return }
+        isQuitHoldActive = true
+        quitHoldProgress = 0.0
+        quitTargetAppIndex = selectedAppIndex
+        quitHoldStartTime = Date()
+
+        quitHoldTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateQuitHoldProgress()
+            }
+        }
+    }
+
+    func cancelQuitHold() {
+        quitHoldTimer?.invalidate()
+        quitHoldTimer = nil
+        quitHoldStartTime = nil
+        isQuitHoldActive = false
+        quitHoldProgress = 0.0
+        quitTargetAppIndex = nil
+    }
+
+    private func updateQuitHoldProgress() {
+        guard let startTime = quitHoldStartTime else { return }
+        let elapsed = Date().timeIntervalSince(startTime)
+        let fraction = min(elapsed / quitHoldDuration, 1.0)
+        quitHoldProgress = CGFloat(fraction)
+
+        if fraction >= 1.0 {
+            executeQuit()
+        }
+    }
+
+    private func executeQuit() {
+        quitHoldTimer?.invalidate()
+        quitHoldTimer = nil
+
+        guard let app = selectedApp else {
+            cancelQuitHold()
+            return
+        }
+
+        // Terminate the app
+        if let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleIdentifier).first {
+            runningApp.terminate()
+            print("[AppState] Quit app: \(app.name)")
+        }
+
+        // Remove the app from the list
+        if let index = applications.firstIndex(where: { $0.pid == app.pid }) {
+            applications.remove(at: index)
+            // Adjust selected index
+            if selectedAppIndex >= applications.count {
+                selectedAppIndex = max(0, applications.count - 1)
+            }
+        }
+
+        // Reset quit state
+        isQuitHoldActive = false
+        quitHoldProgress = 0.0
+        quitTargetAppIndex = nil
+        quitHoldStartTime = nil
+    }
+
     func reset() {
+        cancelQuitHold()
         isVisible = false
         selectedAppIndex = 0
         selectedWindowIndex = 0

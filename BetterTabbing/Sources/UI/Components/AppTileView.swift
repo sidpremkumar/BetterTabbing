@@ -4,6 +4,8 @@ struct AppTileView: View {
     let app: ApplicationModel
     let isSelected: Bool
     let namespace: Namespace.ID  // Kept for API compatibility but not used
+    var isQuitHoldActive: Bool = false
+    var quitHoldProgress: CGFloat = 0.0
     var onHover: ((Bool) -> Void)? = nil
 
     @State private var isHovered = false
@@ -15,7 +17,7 @@ struct AppTileView: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(backgroundColor)
 
-                if isSelected {
+                if isSelected && !isQuitHoldActive {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(
                             LinearGradient(
@@ -37,6 +39,17 @@ struct AppTileView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 48, height: 48)
                     .shadow(color: .black.opacity(0.25), radius: 3, x: 0, y: 2)
+                    .opacity(isQuitHoldActive ? 0.6 : 1.0)
+
+                // Quit hold progress ring overlay
+                if isQuitHoldActive {
+                    CircularProgressRing(
+                        progress: quitHoldProgress,
+                        color: .red,
+                        lineWidth: 3,
+                        size: 56
+                    )
+                }
             }
             .frame(width: 64, height: 64)
 

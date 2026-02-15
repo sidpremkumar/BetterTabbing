@@ -56,6 +56,9 @@ struct SwitcherView: View {
                     applications: appState.filteredApplications,
                     selectedIndex: appState.selectedAppIndex,
                     namespace: selectionNamespace,
+                    quitTargetAppIndex: appState.quitTargetAppIndex,
+                    quitHoldProgress: appState.quitHoldProgress,
+                    isQuitHoldActive: appState.isQuitHoldActive,
                     onAppClicked: { index in
                         appState.selectedAppIndex = index
                         appState.selectedWindowIndex = 0
@@ -190,6 +193,7 @@ struct SwitcherView: View {
         HStack(spacing: 16) {
             KeyHint(keys: ["tab"], label: "Next")
             KeyHint(keys: ["`"], label: "Windows")
+            KeyHint(keys: ["Q"], label: "Quit")
             KeyHint(keys: ["return"], label: "Search")
             KeyHint(keys: ["esc"], label: "Close")
         }

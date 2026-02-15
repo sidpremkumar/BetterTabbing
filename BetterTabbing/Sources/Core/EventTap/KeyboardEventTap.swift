@@ -17,6 +17,8 @@ enum ShortcutEvent {
     case navigateRowUp   // Arrow up in normal mode - move to row above
     case navigateRowDown // Arrow down in normal mode - move to row below
     case quickSwitch     // Quick CMD+TAB to previous app (no UI)
+    case quitHoldStarted   // Q key held down - start quit progress
+    case quitHoldCancelled // Q key released - cancel quit
 }
 
 final class KeyboardEventTap {
@@ -35,6 +37,9 @@ final class KeyboardEventTap {
     private let quickSwitchThreshold: CFAbsoluteTime = 0.12  // 120ms - faster detection
     private var showSwitcherTimer: DispatchWorkItem?
     private var pendingActivation = false  // True between activation and timer/release
+
+    // Quit hold detection
+    private var isHoldingQuit = false
 
     // Configuration
     private var activationModifier: ModifierKey = .option  // OPTION+TAB for development
@@ -66,6 +71,7 @@ final class KeyboardEventTap {
             searchModeActive = false  // Reset search mode when switcher hides
             hadInteractionSinceActivation = false
             pendingActivation = false
+            isHoldingQuit = false
             showSwitcherTimer?.cancel()
             showSwitcherTimer = nil
         }
@@ -166,6 +172,16 @@ final class KeyboardEventTap {
             return Unmanaged.passUnretained(event)
         }
 
+        // Handle Q key up to cancel quit hold
+        if type == .keyUp {
+            if keyCode == UInt16(kVK_ANSI_Q) && isHoldingQuit {
+                isHoldingQuit = false
+                print("[KeyboardEventTap] Q released, cancel quit hold")
+                onShortcutTriggered.send(.quitHoldCancelled)
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
         // Only handle key down events for shortcuts
         guard type == .keyDown else {
             return Unmanaged.passUnretained(event)
@@ -213,20 +229,20 @@ final class KeyboardEventTap {
                 return nil
             }
 
-            // Q/E = cycle windows within selected app (handle early to intercept CMD+Q)
-            // Only when not in search mode (so user can type these letters)
+            // Q = hold to quit selected app (only when not in search mode)
             if !searchModeActive {
                 if keyCode == UInt16(kVK_ANSI_Q) {
-                    hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Q = previous window")
-                    onShortcutTriggered.send(.cycleWindowPrevious)
-                    return nil
-                }
-
-                if keyCode == UInt16(kVK_ANSI_E) {
-                    hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] E = next window")
-                    onShortcutTriggered.send(.cycleWindowNext)
+                    let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                    if isRepeat {
+                        // Already holding, consume the repeat
+                        return nil
+                    }
+                    if !isHoldingQuit {
+                        isHoldingQuit = true
+                        hadInteractionSinceActivation = true
+                        print("[KeyboardEventTap] Q pressed, start quit hold")
+                        onShortcutTriggered.send(.quitHoldStarted)
+                    }
                     return nil
                 }
             }

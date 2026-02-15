@@ -178,6 +178,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelManager.hide()
             eventTap?.setSwitcherVisible(false)
             performQuickSwitch()
+        case .quitHoldStarted:
+            AppState.shared.startQuitHold()
+        case .quitHoldCancelled:
+            AppState.shared.cancelQuitHold()
         }
     }
 

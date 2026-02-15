@@ -43,6 +43,8 @@ final class WindowEnumerator {
             }
 
             let pid = app.processIdentifier
+            // processIdentifier returns -1 if the app has already terminated
+            guard pid >= 0 else { continue }
             let axApp = AXUIElementCreateApplication(pid)
 
             // Get windows from Accessibility API
