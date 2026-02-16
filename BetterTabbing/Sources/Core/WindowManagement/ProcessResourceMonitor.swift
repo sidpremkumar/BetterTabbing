@@ -45,15 +45,6 @@ final class ProcessResourceMonitor: @unchecked Sendable {
                 return String(format: "%.1fs", cpuSeconds)
             }
         }
-
-        /// Memory tier for color coding (0 = low, 1 = medium, 2 = high, 3 = extreme)
-        var memoryTier: Int {
-            let mb = Double(memoryBytes) / (1024 * 1024)
-            if mb >= 2048 { return 3 }    // 2+ GB — extreme
-            if mb >= 512 { return 2 }     // 512 MB+ — high
-            if mb >= 128 { return 1 }     // 128 MB+ — medium
-            return 0                       // low
-        }
     }
 
     // MARK: - Public API
