@@ -182,6 +182,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.startQuitHold()
         case .quitHoldCancelled:
             AppState.shared.cancelQuitHold()
+        case .toggleResourceMonitor:
+            AppState.shared.toggleResourceMonitor()
         }
     }
 

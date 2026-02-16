@@ -14,6 +14,9 @@ struct UserPreferences: Codable {
     var theme: Theme = .system
     var windowSize: WindowSize = .medium
 
+    // Quit Hold
+    var quitHoldDuration: Double = 2.0  // seconds (0.5 - 5.0)
+
     // Launch
     var launchAtLogin: Bool = false
 

@@ -10,6 +10,9 @@ struct ApplicationModel: Identifiable, Hashable {
     var windows: [WindowModel]
     let isActive: Bool
 
+    // Resource usage (populated on demand, not part of equality/hash)
+    var memoryBytes: UInt64 = 0
+
     // Extended metadata (lazy loaded)
     var browserTabs: [BrowserTabModel]?
     var ideProject: String?
@@ -20,7 +23,8 @@ struct ApplicationModel: Identifiable, Hashable {
         name: String,
         icon: NSImage,
         windows: [WindowModel] = [],
-        isActive: Bool = false
+        isActive: Bool = false,
+        memoryBytes: UInt64 = 0
     ) {
         self.id = pid
         self.pid = pid
@@ -29,6 +33,7 @@ struct ApplicationModel: Identifiable, Hashable {
         self.icon = icon
         self.windows = windows
         self.isActive = isActive
+        self.memoryBytes = memoryBytes
     }
 
     func hash(into hasher: inout Hasher) {
@@ -51,6 +56,17 @@ struct ApplicationModel: Identifiable, Hashable {
 
     var primaryWindowTitle: String? {
         windows.first?.title
+    }
+
+    /// Formatted memory string (e.g. "142 MB", "1.2 GB")
+    var formattedMemory: String? {
+        guard memoryBytes > 0 else { return nil }
+        let mb = Double(memoryBytes) / (1024 * 1024)
+        if mb >= 1024 {
+            return String(format: "%.1f GB", mb / 1024)
+        } else {
+            return "\(Int(mb)) MB"
+        }
     }
 }
 

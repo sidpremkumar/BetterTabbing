@@ -112,6 +112,15 @@ final class SwitcherPanel: NSPanel {
                 self?.resizeForWindowList()
             }
             .store(in: &cancellables)
+
+        // Observe resource monitor toggle to re-center panel
+        AppState.shared.$isResourceMonitorActive
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.recenterIfVisible()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Size Calculation (matches SwitcherView)
@@ -133,6 +142,8 @@ final class SwitcherPanel: NSPanel {
         let width: CGFloat
         if showSearchResults {
             width = 480
+        } else if appState.isResourceMonitorActive {
+            width = 420
         } else {
             let idealItemsPerRow = min(appCount, 8)
             let baseWidth = CGFloat(idealItemsPerRow) * 88 + 32
@@ -147,6 +158,13 @@ final class SwitcherPanel: NSPanel {
             let resultCount = min(appState.searchResults.count, 10)
             let resultsHeight = resultCount == 0 ? 80 : CGFloat(resultCount) * 44 + 24
             contentHeight = resultsHeight + 14
+        } else if appState.isResourceMonitorActive {
+            // Resource monitor: bar chart (~100) + header (~20) + entries + hints + padding
+            let entryCount = min(appState.resourceEntries.count, 15)
+            let chartHeight: CGFloat = 110  // Bar chart area
+            let entriesHeight = entryCount == 0 ? 80 : CGFloat(entryCount) * 30 + 24
+            let hintsHeight: CGFloat = 30
+            contentHeight = chartHeight + entriesHeight + hintsHeight + 14
         } else {
             // Each tile: 64px icon + 6px spacing + ~14px text + 12px padding = ~96px
             // Grid spacing: 6px between rows

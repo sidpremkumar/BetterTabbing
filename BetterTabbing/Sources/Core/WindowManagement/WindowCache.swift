@@ -54,7 +54,8 @@ final class WindowCache: @unchecked Sendable {
         let existingOrder = cache.map { $0.pid }
 
         // Enumerate synchronously (this is slow, ~100-200ms)
-        let freshApplications = enumerator.enumerateGroupedByApp()
+        var freshApplications = enumerator.enumerateGroupedByApp()
+        attachResourceUsage(to: &freshApplications)
 
         // Merge preserving MRU order
         if existingOrder.isEmpty {
@@ -110,7 +111,8 @@ final class WindowCache: @unchecked Sendable {
         lock.unlock()
 
         // Run enumeration (this is the slow part - don't hold lock during this!)
-        let freshApplications = enumerator.enumerateGroupedByApp()
+        var freshApplications = enumerator.enumerateGroupedByApp()
+        attachResourceUsage(to: &freshApplications)
 
         // Merge: preserve MRU order from existing cache, but use fresh window data
         let mergedApplications: [ApplicationModel]
@@ -200,7 +202,8 @@ final class WindowCache: @unchecked Sendable {
                     name: cache[0].name,
                     icon: cache[0].icon,
                     windows: cache[0].windows,
-                    isActive: true
+                    isActive: true,
+                    memoryBytes: cache[0].memoryBytes
                 )
             }
             return
@@ -218,7 +221,8 @@ final class WindowCache: @unchecked Sendable {
                 name: cache[i].name,
                 icon: cache[i].icon,
                 windows: cache[i].windows,
-                isActive: i == 0
+                isActive: i == 0,
+                memoryBytes: cache[i].memoryBytes
             )
         }
 
@@ -238,6 +242,17 @@ final class WindowCache: @unchecked Sendable {
             suppressUntil = nil
         }
         return false
+    }
+
+    /// Attach resource usage data to applications (lightweight, ~1-3ms)
+    private func attachResourceUsage(to apps: inout [ApplicationModel]) {
+        let pids = apps.map { $0.pid }
+        let snapshot = ProcessResourceMonitor.shared.snapshot(pids: pids)
+        for i in apps.indices {
+            if let usage = snapshot[apps[i].pid] {
+                apps[i].memoryBytes = usage.memoryBytes
+            }
+        }
     }
 
     func startMonitoring() {

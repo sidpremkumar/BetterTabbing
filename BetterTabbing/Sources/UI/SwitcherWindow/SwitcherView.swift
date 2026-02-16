@@ -50,6 +50,17 @@ struct SwitcherView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
 
+            } else if appState.isResourceMonitorActive {
+                // Resource monitor view — toggled with E key
+                ResourceMonitorView(entries: appState.resourceEntries)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+
+                // Keyboard hints for monitor mode
+                monitorHintsView
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+
             } else {
                 // App grid (normal mode) - explicitly disable animation on grid content
                 AppGridView(
@@ -137,6 +148,10 @@ struct SwitcherView: View {
             return 480  // Fixed width for search results
         }
 
+        if appState.isResourceMonitorActive {
+            return 420  // Compact fixed width for resource monitor
+        }
+
         if appState.isSearchActive && appState.searchQuery.isEmpty {
             // Search mode but no query yet - use app grid width
             let idealItemsPerRow = min(appCount, 8)
@@ -194,7 +209,16 @@ struct SwitcherView: View {
             KeyHint(keys: ["tab"], label: "Next")
             KeyHint(keys: ["`"], label: "Windows")
             KeyHint(keys: ["Q"], label: "Quit")
+            KeyHint(keys: ["E"], label: "Monitor")
             KeyHint(keys: ["return"], label: "Search")
+            KeyHint(keys: ["esc"], label: "Close")
+        }
+        .opacity(0.8)
+    }
+
+    private var monitorHintsView: some View {
+        HStack(spacing: 16) {
+            KeyHint(keys: ["E"], label: "Apps")
             KeyHint(keys: ["esc"], label: "Close")
         }
         .opacity(0.8)

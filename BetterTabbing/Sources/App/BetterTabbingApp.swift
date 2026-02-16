@@ -119,6 +119,22 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            Section("Quit Hold Duration") {
+                HStack {
+                    Text(String(format: "%.1fs", appState.preferences.quitHoldDuration))
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, alignment: .trailing)
+
+                    Slider(value: $appState.preferences.quitHoldDuration, in: 0.5...5.0, step: 0.5)
+
+                }
+
+                Text("How long to hold Q in the switcher to quit an app.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Windows") {
                 Toggle("Show windows from all Spaces", isOn: $appState.preferences.showAllSpaces)
                 Toggle("Show minimized windows", isOn: $appState.preferences.showMinimizedWindows)
@@ -137,6 +153,7 @@ struct ShortcutSettingsView: View {
                 KeyboardShortcutRow(title: "Previous application", shortcut: "⇧ TAB")
                 KeyboardShortcutRow(title: "Next window", shortcut: "`")
                 KeyboardShortcutRow(title: "Previous window", shortcut: "⇧ `")
+                KeyboardShortcutRow(title: "Quit app", shortcut: "Hold Q")
                 KeyboardShortcutRow(title: "Search", shortcut: "Return")
                 KeyboardShortcutRow(title: "Confirm", shortcut: "Release modifier")
                 KeyboardShortcutRow(title: "Cancel", shortcut: "Escape")

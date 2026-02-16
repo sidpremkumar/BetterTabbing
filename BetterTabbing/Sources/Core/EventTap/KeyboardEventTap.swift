@@ -19,6 +19,7 @@ enum ShortcutEvent {
     case quickSwitch     // Quick CMD+TAB to previous app (no UI)
     case quitHoldStarted   // Q key held down - start quit progress
     case quitHoldCancelled // Q key released - cancel quit
+    case toggleResourceMonitor // E key - toggle mini activity monitor
 }
 
 final class KeyboardEventTap {
@@ -243,6 +244,14 @@ final class KeyboardEventTap {
                         print("[KeyboardEventTap] Q pressed, start quit hold")
                         onShortcutTriggered.send(.quitHoldStarted)
                     }
+                    return nil
+                }
+
+                // E = toggle resource monitor view
+                if keyCode == UInt16(kVK_ANSI_E) {
+                    hadInteractionSinceActivation = true
+                    print("[KeyboardEventTap] E pressed, toggle resource monitor")
+                    onShortcutTriggered.send(.toggleResourceMonitor)
                     return nil
                 }
             }

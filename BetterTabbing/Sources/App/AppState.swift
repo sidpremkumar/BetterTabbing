@@ -19,6 +19,11 @@ final class AppState: ObservableObject {
     @Published var hasMouseMoved = false  // Whether mouse has actually moved since panel appeared
     var lastMousePosition: CGPoint? = nil  // Track last mouse position to detect actual movement
 
+    // MARK: - Resource Monitor State
+
+    @Published var isResourceMonitorActive = false
+    @Published var resourceEntries: [ProcessResourceMonitor.ProcessResourceEntry] = []
+
     // MARK: - Quit Hold State
 
     @Published var isQuitHoldActive = false
@@ -26,7 +31,7 @@ final class AppState: ObservableObject {
     @Published var quitTargetAppIndex: Int? = nil
     private var quitHoldTimer: Timer?
     private var quitHoldStartTime: Date?
-    private let quitHoldDuration: TimeInterval = 2.0
+    private var quitHoldDuration: TimeInterval { TimeInterval(preferences.quitHoldDuration) }
 
     // MARK: - Preferences
 
@@ -212,6 +217,18 @@ final class AppState: ObservableObject {
         return max(1, Int(contentWidth / itemWidth))
     }
 
+    // MARK: - Resource Monitor Methods
+
+    func toggleResourceMonitor() {
+        isResourceMonitorActive.toggle()
+        if isResourceMonitorActive {
+            // One-shot fetch of system-wide resource data
+            resourceEntries = ProcessResourceMonitor.shared.systemSnapshot()
+        } else {
+            resourceEntries = []
+        }
+    }
+
     // MARK: - Quit Hold Methods
 
     func startQuitHold() {
@@ -290,6 +307,8 @@ final class AppState: ObservableObject {
         isKeyboardNavigating = false
         hasMouseMoved = false
         lastMousePosition = nil
+        isResourceMonitorActive = false
+        resourceEntries = []
     }
 
     private init() {}
