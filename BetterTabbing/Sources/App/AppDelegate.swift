@@ -183,7 +183,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .quitHoldCancelled:
             AppState.shared.cancelQuitHold()
         case .toggleResourceMonitor:
+            AppState.shared.cancelEHold(triggeredAI: false)
             AppState.shared.toggleResourceMonitor()
+        case .eHoldStarted:
+            AppState.shared.startEHold()
+        case .aiInsightRequested:
+            AppState.shared.cancelEHold(triggeredAI: true)
+            AppState.shared.requestAIInsightWithOllama()
+        case .aiInsightCancelled:
+            AppState.shared.cancelEHold(triggeredAI: false)
+        case .toggleProcessGrouping:
+            AppState.shared.isProcessGroupingEnabled.toggle()
         }
     }
 

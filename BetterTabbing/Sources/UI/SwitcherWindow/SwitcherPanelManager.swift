@@ -156,8 +156,12 @@ final class SwitcherPanelManager {
 
     func activateSearch() {
         AppState.shared.isSearchActive = true
-        // Make any panel key to receive keyboard input
-        panels.values.first?.makeKey()
+        // Make panel key after the resize/layout settles so focus isn't lost
+        let panel = panels.values.first
+        panel?.makeKey()
+        DispatchQueue.main.async {
+            panel?.makeKey()
+        }
     }
 
     func confirmSelection() {

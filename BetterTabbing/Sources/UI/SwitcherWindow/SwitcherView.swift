@@ -51,10 +51,25 @@ struct SwitcherView: View {
                 .padding(.bottom, 14)
 
             } else if appState.isResourceMonitorActive {
-                // Resource monitor view — toggled with E key
-                ResourceMonitorView(entries: appState.resourceEntries)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                // Resource monitor view — toggled with E key, live-updating
+                ResourceMonitorView(
+                    entries: appState.resourceEntries,
+                    systemMemory: appState.systemMemory,
+                    systemCPU: appState.systemCPU,
+                    cpuTemperature: appState.cpuTemperature,
+                    thermalState: appState.thermalState,
+                    cpuHistory: appState.cpuHistory,
+                    memoryHistory: appState.memoryHistory,
+                    aiInsight: appState.aiInsight,
+                    aiInsightLoading: appState.aiInsightLoading,
+                    ollamaAvailable: appState.ollamaAvailable,
+                    isEHoldActive: appState.isEHoldActive,
+                    eHoldProgress: appState.eHoldProgress,
+                    isGroupingEnabled: appState.isProcessGroupingEnabled,
+                    onRefreshInsight: { appState.refreshAIInsight() }
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
 
                 // Keyboard hints for monitor mode
                 monitorHintsView
@@ -131,8 +146,12 @@ struct SwitcherView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onChange(of: appState.isSearchActive) { oldValue, isActive in
             if isActive {
-                isSearchFocused = true
                 appState.selectedSearchIndex = 0
+                // Delay focus to next run loop so the SearchBarView is fully
+                // inserted into the hierarchy and the panel resize has started
+                DispatchQueue.main.async {
+                    isSearchFocused = true
+                }
             }
         }
         .onChange(of: appState.searchQuery) { oldValue, newValue in
@@ -149,7 +168,7 @@ struct SwitcherView: View {
         }
 
         if appState.isResourceMonitorActive {
-            return 420  // Compact fixed width for resource monitor
+            return 540  // Wider to fit gauges + live graph
         }
 
         if appState.isSearchActive && appState.searchQuery.isEmpty {
@@ -219,6 +238,8 @@ struct SwitcherView: View {
     private var monitorHintsView: some View {
         HStack(spacing: 16) {
             KeyHint(keys: ["E"], label: "Apps")
+            KeyHint(keys: ["E"], label: "Hold: AI")
+            KeyHint(keys: ["F"], label: appState.isProcessGroupingEnabled ? "Ungroup" : "Group")
             KeyHint(keys: ["esc"], label: "Close")
         }
         .opacity(0.8)

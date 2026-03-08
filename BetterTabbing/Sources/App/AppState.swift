@@ -22,7 +22,44 @@ final class AppState: ObservableObject {
     // MARK: - Resource Monitor State
 
     @Published var isResourceMonitorActive = false
+    @Published var isProcessGroupingEnabled = true
     @Published var resourceEntries: [ProcessResourceMonitor.ProcessResourceEntry] = []
+    @Published var systemMemory: ProcessResourceMonitor.SystemMemory?
+    @Published var systemCPU: ProcessResourceMonitor.SystemCPU?
+    @Published var cpuTemperature: Double?
+    @Published var thermalState: ProcessInfo.ThermalState = .nominal
+
+    /// History of system CPU usage for the live graph (most recent last)
+    @Published var cpuHistory: [Double] = []
+    /// History of system memory usage fraction for the live graph
+    @Published var memoryHistory: [Double] = []
+
+    // MARK: - AI Insight State
+
+    @Published var aiInsight: String?
+    @Published var aiInsightLoading = false
+    /// Whether Ollama is reachable (checked once per monitor open)
+    @Published var ollamaAvailable = false
+    /// Prevents re-querying every poll — only once per monitor session
+    private var hasRequestedInsight = false
+    /// Timer that clears the AI insight after it becomes stale
+    private var aiInsightCooldownTimer: Timer?
+    /// Seconds before the AI insight auto-clears (processes change, old summary is irrelevant)
+    private let aiInsightCooldown: TimeInterval = 30
+
+    /// Maximum number of history points to keep (at 1s intervals = 60s of data)
+    private let maxHistoryPoints = 60
+
+    private var resourceTimer: Timer?
+
+    // MARK: - E Hold (Charging Animation) State
+
+    @Published var isEHoldActive = false
+    @Published var eHoldProgress: CGFloat = 0.0
+    private var eHoldTimer: Timer?
+    private var eHoldStartTime: Date?
+    /// Duration for the charging bar to fill (visual only — actual threshold is in KeyboardEventTap)
+    private let eHoldAnimationDuration: TimeInterval = 0.5
 
     // MARK: - Quit Hold State
 
@@ -162,8 +199,6 @@ final class AppState: ObservableObject {
     }
 
     /// Move selection to the row above in the grid
-    /// The grid uses adaptive columns ~92px wide (80-100 min/max + spacing)
-    /// For a ~660px content width, that's approximately 7 items per row
     func selectAppInRowAbove() {
         markKeyboardNavigation()
         let count = filteredApplications.count
@@ -176,7 +211,6 @@ final class AppState: ObservableObject {
             selectedAppIndex = newIndex
             selectedWindowIndex = 0
         }
-        // If already on first row, don't wrap - stay in place
     }
 
     /// Move selection to the row below in the grid
@@ -192,7 +226,6 @@ final class AppState: ObservableObject {
             selectedAppIndex = newIndex
             selectedWindowIndex = 0
         } else {
-            // If going past the last row, go to the last item
             let lastIndex = count - 1
             if selectedAppIndex != lastIndex {
                 selectedAppIndex = lastIndex
@@ -201,18 +234,13 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Calculate approximate items per row based on dynamic panel width
-    /// Grid uses .adaptive(minimum: 76, maximum: 90) with 6px spacing
-    /// Tile is ~76px with 6px padding = ~82px per item
     private func calculateItemsPerRow() -> Int {
-        // Calculate based on app count (matching SwitcherView.calculateWidth())
         let appCount = filteredApplications.count
-        let itemWidth: CGFloat = 82  // ~76-90 tile + 6 spacing
+        let itemWidth: CGFloat = 82
 
-        // Width calculation matches SwitcherView
         let idealItemsPerRow = min(appCount, 8)
         let baseWidth = CGFloat(idealItemsPerRow) * 92 + 32
-        let contentWidth = min(max(baseWidth, 400), 750) - 32  // Subtract padding
+        let contentWidth = min(max(baseWidth, 400), 750) - 32
 
         return max(1, Int(contentWidth / itemWidth))
     }
@@ -222,11 +250,205 @@ final class AppState: ObservableObject {
     func toggleResourceMonitor() {
         isResourceMonitorActive.toggle()
         if isResourceMonitorActive {
-            // One-shot fetch of system-wide resource data
-            resourceEntries = ProcessResourceMonitor.shared.systemSnapshot()
+            startResourcePolling()
         } else {
-            resourceEntries = []
+            stopResourcePolling()
         }
+    }
+
+    private func startResourcePolling() {
+        // Prime the CPU delta sampler (need fresh baseline for accurate %)
+        ProcessResourceMonitor.shared.resetSamples()
+        // Keep cpuHistory/memoryHistory across toggles so the graph persists
+        hasRequestedInsight = false
+
+        // Quick reachability check (non-blocking, 2s timeout)
+        // Used to show the right hint text — hold-E will start Ollama regardless
+        Task {
+            let available = await OllamaClient.shared.isAvailable()
+            await MainActor.run { self.ollamaAvailable = available }
+        }
+
+        // Initial "priming" fetch — CPU% will be 0 on first call (no delta yet)
+        refreshResourceData()
+
+        // Poll every 1.5 seconds for smooth updates
+        resourceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshResourceData()
+            }
+        }
+    }
+
+    private func stopResourcePolling() {
+        resourceTimer?.invalidate()
+        resourceTimer = nil
+        resourceEntries = []
+        systemMemory = nil
+        systemCPU = nil
+        cpuTemperature = nil
+        // Intentionally keep cpuHistory & memoryHistory — 960 bytes in RAM,
+        // lets the graph show prior context when reopened.
+        aiInsightCooldownTimer?.invalidate()
+        aiInsightCooldownTimer = nil
+        hasRequestedInsight = false
+        ProcessResourceMonitor.shared.resetSamples()
+
+        // Kill Ollama if we started it — don't leave it running
+        Task { await OllamaClient.shared.shutdownIfWeStarted() }
+    }
+
+    private func refreshResourceData() {
+        let monitor = ProcessResourceMonitor.shared
+        resourceEntries = monitor.systemSnapshot()
+        systemMemory = monitor.systemMemory()
+        systemCPU = monitor.systemCPU()
+
+        // Temperature: exact °C on Intel, thermal state fallback on Apple Silicon
+        let thermal = monitor.thermalInfo()
+        cpuTemperature = thermal.temperature
+        thermalState = thermal.state
+
+        // Append to history
+        if let cpu = systemCPU {
+            cpuHistory.append(cpu.usagePercent)
+            if cpuHistory.count > maxHistoryPoints {
+                cpuHistory.removeFirst(cpuHistory.count - maxHistoryPoints)
+            }
+        }
+        if let mem = systemMemory {
+            memoryHistory.append(mem.usedFraction * 100)
+            if memoryHistory.count > maxHistoryPoints {
+                memoryHistory.removeFirst(memoryHistory.count - maxHistoryPoints)
+            }
+        }
+
+    }
+
+    // MARK: - AI Insight (Hold E)
+
+    /// Called when user holds E — starts Ollama if needed, queries, then shuts down.
+    func requestAIInsightWithOllama() {
+        guard !aiInsightLoading else { return }
+
+        // Ensure resource monitor is showing
+        if !isResourceMonitorActive {
+            isResourceMonitorActive = true
+            startResourcePolling()
+        }
+
+        aiInsightLoading = true
+
+        Task {
+            // Start Ollama if not running (will track if we started it)
+            let ready = await OllamaClient.shared.ensureRunning()
+            await MainActor.run { self.ollamaAvailable = ready }
+
+            guard ready else {
+                await MainActor.run {
+                    self.aiInsightLoading = false
+                    self.aiInsight = "Could not start Ollama. Install from ollama.com"
+                }
+                return
+            }
+
+            // Wait for at least 2 data points if we don't have them yet
+            for _ in 0..<6 {
+                let count = await MainActor.run { self.cpuHistory.count }
+                if count >= 2 { break }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+
+            let snapshot = await MainActor.run { self.buildSnapshot() }
+            let result = await OllamaClient.shared.summarizeProcesses(snapshot)
+
+            await MainActor.run {
+                self.setAIInsight(result ?? "No response from model")
+                self.aiInsightLoading = false
+            }
+        }
+    }
+
+    /// Manually refresh the AI insight (e.g. user taps refresh button)
+    func refreshAIInsight() {
+        guard ollamaAvailable, !aiInsightLoading else { return }
+        aiInsightLoading = true
+        let snapshot = buildSnapshot()
+        Task {
+            let result = await OllamaClient.shared.summarizeProcesses(snapshot)
+            await MainActor.run {
+                self.setAIInsight(result)
+                self.aiInsightLoading = false
+            }
+        }
+    }
+
+    /// Set the AI insight and start the cooldown timer to auto-clear it
+    private func setAIInsight(_ text: String?) {
+        aiInsightCooldownTimer?.invalidate()
+        aiInsight = text
+
+        guard text != nil else { return }
+        aiInsightCooldownTimer = Timer.scheduledTimer(withTimeInterval: aiInsightCooldown, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.aiInsight = nil
+            }
+        }
+    }
+
+    private func buildSnapshot() -> ProcessSnapshot {
+        ProcessSnapshot(
+            processes: resourceEntries.prefix(8).map { entry in
+                ProcessSnapshot.Process(
+                    name: entry.name,
+                    cpuPercent: entry.cpuPercent,
+                    memMB: Int(entry.memoryBytes / (1024 * 1024))
+                )
+            },
+            cpuUsagePercent: Int(systemCPU?.usagePercent ?? 0),
+            memUsedGB: systemMemory?.formattedUsed ?? "?",
+            memTotalGB: systemMemory?.formattedTotal ?? "?",
+            tempC: cpuTemperature
+        )
+    }
+
+    // MARK: - E Hold Methods (Charging Animation)
+
+    func startEHold() {
+        guard !isEHoldActive else { return }
+        isEHoldActive = true
+        eHoldProgress = 0.0
+        eHoldStartTime = Date()
+
+        eHoldTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateEHoldProgress()
+            }
+        }
+    }
+
+    func cancelEHold(triggeredAI: Bool) {
+        eHoldTimer?.invalidate()
+        eHoldTimer = nil
+        eHoldStartTime = nil
+
+        if triggeredAI {
+            // Keep progress full briefly to show completion
+            eHoldProgress = 1.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.isEHoldActive = false
+                self?.eHoldProgress = 0.0
+            }
+        } else {
+            isEHoldActive = false
+            eHoldProgress = 0.0
+        }
+    }
+
+    private func updateEHoldProgress() {
+        guard let start = eHoldStartTime else { return }
+        let elapsed = Date().timeIntervalSince(start)
+        eHoldProgress = min(CGFloat(elapsed / eHoldAnimationDuration), 1.0)
     }
 
     // MARK: - Quit Hold Methods
@@ -274,22 +496,18 @@ final class AppState: ObservableObject {
             return
         }
 
-        // Terminate the app
         if let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleIdentifier).first {
             runningApp.terminate()
             print("[AppState] Quit app: \(app.name)")
         }
 
-        // Remove the app from the list
         if let index = applications.firstIndex(where: { $0.pid == app.pid }) {
             applications.remove(at: index)
-            // Adjust selected index
             if selectedAppIndex >= applications.count {
                 selectedAppIndex = max(0, applications.count - 1)
             }
         }
 
-        // Reset quit state
         isQuitHoldActive = false
         quitHoldProgress = 0.0
         quitTargetAppIndex = nil
@@ -297,7 +515,9 @@ final class AppState: ObservableObject {
     }
 
     func reset() {
+        cancelEHold(triggeredAI: false)
         cancelQuitHold()
+        stopResourcePolling()
         isVisible = false
         selectedAppIndex = 0
         selectedWindowIndex = 0
@@ -308,7 +528,6 @@ final class AppState: ObservableObject {
         hasMouseMoved = false
         lastMousePosition = nil
         isResourceMonitorActive = false
-        resourceEntries = []
     }
 
     private init() {}

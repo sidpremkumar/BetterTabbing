@@ -19,7 +19,11 @@ enum ShortcutEvent {
     case quickSwitch     // Quick CMD+TAB to previous app (no UI)
     case quitHoldStarted   // Q key held down - start quit progress
     case quitHoldCancelled // Q key released - cancel quit
-    case toggleResourceMonitor // E key - toggle mini activity monitor
+    case toggleResourceMonitor // E key tap - toggle mini activity monitor
+    case eHoldStarted          // E key pressed - start charging animation
+    case aiInsightRequested    // E key held - start ollama + query
+    case aiInsightCancelled    // E key released after hold
+    case toggleProcessGrouping // F key tap - toggle process grouping in monitor
 }
 
 final class KeyboardEventTap {
@@ -41,6 +45,12 @@ final class KeyboardEventTap {
 
     // Quit hold detection
     private var isHoldingQuit = false
+
+    // E key hold detection for AI insight
+    private var isHoldingE = false
+    private var eKeyDownTime: CFAbsoluteTime = 0
+    /// Threshold: hold > 400ms = AI insight request, shorter = toggle monitor
+    private let eHoldThreshold: CFAbsoluteTime = 0.4
 
     // Configuration
     private var activationModifier: ModifierKey = .option  // OPTION+TAB for development
@@ -73,6 +83,7 @@ final class KeyboardEventTap {
             hadInteractionSinceActivation = false
             pendingActivation = false
             isHoldingQuit = false
+            isHoldingE = false
             showSwitcherTimer?.cancel()
             showSwitcherTimer = nil
         }
@@ -173,12 +184,25 @@ final class KeyboardEventTap {
             return Unmanaged.passUnretained(event)
         }
 
-        // Handle Q key up to cancel quit hold
+        // Handle key-up events
         if type == .keyUp {
             if keyCode == UInt16(kVK_ANSI_Q) && isHoldingQuit {
                 isHoldingQuit = false
                 print("[KeyboardEventTap] Q released, cancel quit hold")
                 onShortcutTriggered.send(.quitHoldCancelled)
+            }
+            if keyCode == UInt16(kVK_ANSI_E) && isHoldingE {
+                let holdDuration = CFAbsoluteTimeGetCurrent() - eKeyDownTime
+                isHoldingE = false
+                if holdDuration < eHoldThreshold {
+                    // Short tap → toggle resource monitor
+                    print("[KeyboardEventTap] E tapped (\(Int(holdDuration * 1000))ms), toggle monitor")
+                    onShortcutTriggered.send(.toggleResourceMonitor)
+                } else {
+                    // Long hold → AI insight requested
+                    print("[KeyboardEventTap] E held (\(Int(holdDuration * 1000))ms), AI insight")
+                    onShortcutTriggered.send(.aiInsightRequested)
+                }
             }
             return Unmanaged.passUnretained(event)
         }
@@ -247,11 +271,26 @@ final class KeyboardEventTap {
                     return nil
                 }
 
-                // E = toggle resource monitor view
+                // E = tap to toggle monitor, hold for AI insight
                 if keyCode == UInt16(kVK_ANSI_E) {
+                    let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                    if isRepeat { return nil } // Consume repeats
+                    if !isHoldingE {
+                        isHoldingE = true
+                        eKeyDownTime = CFAbsoluteTimeGetCurrent()
+                        hadInteractionSinceActivation = true
+                        // Send hold-started so UI can show charging animation
+                        onShortcutTriggered.send(.eHoldStarted)
+                    }
+                    return nil
+                }
+
+                // F = toggle process grouping in resource monitor
+                if keyCode == UInt16(kVK_ANSI_F) {
+                    let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                    if isRepeat { return nil }
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] E pressed, toggle resource monitor")
-                    onShortcutTriggered.send(.toggleResourceMonitor)
+                    onShortcutTriggered.send(.toggleProcessGrouping)
                     return nil
                 }
             }
