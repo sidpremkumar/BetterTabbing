@@ -53,11 +53,24 @@ final class KeyboardEventTap {
     private let eHoldThreshold: CFAbsoluteTime = 0.4
 
     // Configuration
-    private var activationModifier: ModifierKey = .option  // OPTION+TAB for development
+    private var activationModifier: ModifierKey = .command  // CMD+TAB (replaces system switcher)
     private let activationKeyCode: UInt16 = UInt16(kVK_Tab)
 
+    /// Whether the CGEventTap is currently created and enabled.
+    var isEnabled: Bool { eventTap != nil }
+
     init() {
+        // Tap creation is deferred to start(), so AppDelegate can create it
+        // only after Input Monitoring permission is confirmed (and retry until then).
+    }
+
+    /// Create and enable the event tap if it isn't already running.
+    /// Returns true if the tap is live afterwards. Safe to call repeatedly.
+    @discardableResult
+    func start() -> Bool {
+        if eventTap != nil { return true }
         setupEventTap()
+        return eventTap != nil
     }
 
     deinit {

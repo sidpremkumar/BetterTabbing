@@ -149,7 +149,7 @@ struct SwitcherView: View {
                 appState.selectedSearchIndex = 0
                 // Delay focus to next run loop so the SearchBarView is fully
                 // inserted into the hierarchy and the panel resize has started
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     isSearchFocused = true
                 }
             }

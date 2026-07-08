@@ -13,16 +13,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Hide from Dock
         NSApp.setActivationPolicy(.accessory)
 
-        // Check/request permissions
+        // Wire up the event tap object (subscriptions + saved modifier), but don't
+        // create the CGEventTap yet — that needs Input Monitoring permission.
+        setupEventTap()
+
+        // Check/request permissions, then create the tap (retrying until granted).
         Task { @MainActor in
             let status = await PermissionManager.shared.checkStatus()
             if !status.allGranted {
                 await PermissionManager.shared.requestPermissions()
             }
+            startEventTapWhenReady()
         }
-
-        // Initialize event tap
-        setupEventTap()
 
         // Panel manager is a lazy singleton - will create panels on first show
 
@@ -102,6 +104,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
 
         print("[BetterTabbing] Event tap configured")
+    }
+
+    /// Try to create the CGEventTap now; if Input Monitoring hasn't been granted yet,
+    /// retry every second until it succeeds. Handles the "granted while running" case
+    /// so the user doesn't have to relaunch after approving the permission.
+    private func startEventTapWhenReady() {
+        if eventTap?.start() == true {
+            print("[BetterTabbing] Event tap started successfully")
+            return
+        }
+
+        print("[BetterTabbing] Event tap not ready (Input Monitoring not granted?), retrying in 1s")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.startEventTapWhenReady()
+        }
     }
 
     private func showPreferencesWindow() {

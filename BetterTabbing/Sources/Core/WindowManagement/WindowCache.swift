@@ -105,56 +105,63 @@ final class WindowCache: @unchecked Sendable {
             return
         }
         prefetchInProgress = true
-
-        // Capture existing order BEFORE releasing lock
-        let existingOrder = cache.map { $0.pid }
         lock.unlock()
 
         // Run enumeration (this is the slow part - don't hold lock during this!)
         var freshApplications = enumerator.enumerateGroupedByApp()
         attachResourceUsage(to: &freshApplications)
 
-        // Merge: preserve MRU order from existing cache, but use fresh window data
-        let mergedApplications: [ApplicationModel]
-        if existingOrder.isEmpty {
-            // No existing order - use fresh data as-is
-            mergedApplications = freshApplications
-        } else {
-            // Build a lookup of fresh apps by PID
-            var freshByPid: [pid_t: ApplicationModel] = [:]
-            for app in freshApplications {
-                freshByPid[app.pid] = app
-            }
-
-            // Start with apps in existing order (that still exist)
-            var result: [ApplicationModel] = []
-            var usedPids: Set<pid_t> = []
-
-            for pid in existingOrder {
-                if let freshApp = freshByPid[pid] {
-                    result.append(freshApp)
-                    usedPids.insert(pid)
-                }
-            }
-
-            // Add any new apps that weren't in old cache (at the end)
-            for app in freshApplications {
-                if !usedPids.contains(app.pid) {
-                    result.append(app)
-                }
-            }
-
-            mergedApplications = result
+        // Build a lookup of fresh apps by PID
+        var freshByPid: [pid_t: ApplicationModel] = [:]
+        for app in freshApplications {
+            freshByPid[app.pid] = app
         }
 
-        // Update cache atomically
+        // Merge under the lock, using the CURRENT cache order as the authority.
+        // This captures any moveAppToFront() that happened during enumeration, so a
+        // quick-switch that raced with this prefetch is not clobbered by a stale snapshot.
         lock.lock()
-        cache = mergedApplications
+        let currentOrder = cache.map { $0.pid }
+
+        var result: [ApplicationModel] = []
+        var usedPids: Set<pid_t> = []
+
+        // Apps in current MRU order (that still exist), with fresh window data
+        for pid in currentOrder {
+            if let freshApp = freshByPid[pid] {
+                result.append(freshApp)
+                usedPids.insert(pid)
+            }
+        }
+
+        // Any new apps that weren't in the cache yet (at the end)
+        for app in freshApplications {
+            if !usedPids.contains(app.pid) {
+                result.append(app)
+            }
+        }
+
+        // Keep isActive consistent with MRU convention (front = active), so the fresh
+        // enumeration's stale active flag doesn't fight moveAppToFront after a race.
+        for i in result.indices where result[i].isActive != (i == 0) {
+            result[i] = ApplicationModel(
+                pid: result[i].pid,
+                bundleIdentifier: result[i].bundleIdentifier,
+                name: result[i].name,
+                icon: result[i].icon,
+                windows: result[i].windows,
+                isActive: i == 0,
+                memoryBytes: result[i].memoryBytes
+            )
+        }
+
+        cache = result
         lastUpdate = Date()
         prefetchInProgress = false
+        let count = result.count
         lock.unlock()
 
-        print("[WindowCache] Prefetch complete, \(mergedApplications.count) apps, preserved MRU order")
+        print("[WindowCache] Prefetch complete, \(count) apps, preserved MRU order")
     }
 
     /// Prefetch on background thread - non-blocking

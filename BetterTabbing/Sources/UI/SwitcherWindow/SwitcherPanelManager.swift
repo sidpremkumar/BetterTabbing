@@ -156,11 +156,17 @@ final class SwitcherPanelManager {
 
     func activateSearch() {
         AppState.shared.isSearchActive = true
-        // Make panel key after the resize/layout settles so focus isn't lost
-        let panel = panels.values.first
-        panel?.makeKey()
-        DispatchQueue.main.async {
-            panel?.makeKey()
+        // Find the panel on the screen with the mouse cursor (the one the user is interacting with)
+        let mouseLocation = NSEvent.mouseLocation
+        let activePanel = panels.values.first(where: { panel in
+            guard let screen = panel.associatedScreen else { return false }
+            return screen.frame.contains(mouseLocation)
+        }) ?? panels.values.first
+        // Make it key so it can receive keyboard input; the SearchBarView onAppear
+        // will force-focus the NSTextField via AppKit's makeFirstResponder.
+        activePanel?.makeKey()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            activePanel?.makeKey()
         }
     }
 

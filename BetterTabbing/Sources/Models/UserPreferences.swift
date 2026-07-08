@@ -2,8 +2,8 @@ import Foundation
 
 struct UserPreferences: Codable {
     // Activation
-    var activationModifier: ModifierKey = .option
-    var useSystemShortcut: Bool = false  // If true, use CMD+TAB instead of OPTION+TAB
+    var activationModifier: ModifierKey = .command
+    var useSystemShortcut: Bool = true  // If true, use CMD+TAB (replaces system) instead of OPTION+TAB
 
     // Behavior
     var showAllSpaces: Bool = false
