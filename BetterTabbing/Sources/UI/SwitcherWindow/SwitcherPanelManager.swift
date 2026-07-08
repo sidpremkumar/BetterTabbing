@@ -9,6 +9,10 @@ final class SwitcherPanelManager {
     /// Active panels keyed by screen identifier
     private var panels: [String: SwitcherPanel] = [:]
 
+    /// The panel on the screen the user is looking at — the one that holds key status and
+    /// receives search/keyboard input. Chosen at show time; reused when search activates.
+    private weak var activePanel: SwitcherPanel?
+
     /// Cancellables for Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
 
@@ -50,7 +54,8 @@ final class SwitcherPanelManager {
                 if let id = screenIdentifier(for: screen), addedIds.contains(id) {
                     let panel = createPanel(for: screen)
                     panels[id] = panel
-                    panel.showOnScreen(skipStateUpdate: true)
+                    // Mirror panel added mid-display — don't steal key from the active panel.
+                    panel.showOnScreen(skipStateUpdate: true, makeKey: false)
                     print("[SwitcherPanelManager] Added panel for new screen: \(id)")
                 }
             }
@@ -74,6 +79,24 @@ final class SwitcherPanelManager {
 
     private func createPanel(for screen: NSScreen) -> SwitcherPanel {
         return SwitcherPanel(screen: screen)
+    }
+
+    /// Resolve which panel should be the key window — i.e. the screen the user is looking at.
+    /// `NSScreen.main` is the screen holding the keyboard-focused window, which is the correct
+    /// signal for keyboard-driven switching (the mouse is often parked on another screen).
+    /// IMPORTANT: call this BEFORE any panel is made key, otherwise `NSScreen.main` flips to
+    /// the panel's own screen. Falls back to the screen under the mouse, then any panel.
+    private func resolvePrimaryPanel() -> SwitcherPanel? {
+        if let mainScreen = NSScreen.main,
+           let id = screenIdentifier(for: mainScreen),
+           let panel = panels[id] {
+            return panel
+        }
+        let mouse = NSEvent.mouseLocation
+        if let panel = panels.values.first(where: { $0.associatedScreen?.frame.contains(mouse) ?? false }) {
+            return panel
+        }
+        return panels.values.first
     }
 
     private func ensurePanelsExist() {
@@ -103,10 +126,15 @@ final class SwitcherPanelManager {
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 
-        // Show all panels (without re-updating state)
+        // Pick the key panel BEFORE showing any panel (NSScreen.main must be read first).
+        let primary = resolvePrimaryPanel()
+        activePanel = primary
+
+        // Show all panels; only the primary becomes key so search/keyboard input lands there.
         for panel in panels.values {
-            panel.showOnScreen(skipStateUpdate: true)
+            panel.showOnScreen(skipStateUpdate: true, makeKey: panel === primary)
         }
+        primary?.makeKeyAndOrderFront(nil)
 
         let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
         print("[SwitcherPanelManager] Shown \(panels.count) panels in \(Int(elapsed))ms with \(finalApps.count) apps")
@@ -121,9 +149,14 @@ final class SwitcherPanelManager {
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
 
+        // Pick the key panel BEFORE showing any panel (NSScreen.main must be read first).
+        let primary = resolvePrimaryPanel()
+        activePanel = primary
+
         for panel in panels.values {
-            panel.showOnScreen(skipStateUpdate: true)
+            panel.showOnScreen(skipStateUpdate: true, makeKey: panel === primary)
         }
+        primary?.makeKeyAndOrderFront(nil)
 
         print("[SwitcherPanelManager] Shown \(panels.count) panels")
     }
@@ -132,6 +165,7 @@ final class SwitcherPanelManager {
         for panel in panels.values {
             panel.hidePanel()
         }
+        activePanel = nil
         AppState.shared.reset()
         print("[SwitcherPanelManager] Hidden all \(panels.count) panels")
     }
@@ -156,17 +190,16 @@ final class SwitcherPanelManager {
 
     func activateSearch() {
         AppState.shared.isSearchActive = true
-        // Find the panel on the screen with the mouse cursor (the one the user is interacting with)
-        let mouseLocation = NSEvent.mouseLocation
-        let activePanel = panels.values.first(where: { panel in
-            guard let screen = panel.associatedScreen else { return false }
-            return screen.frame.contains(mouseLocation)
-        }) ?? panels.values.first
-        // Make it key so it can receive keyboard input; the SearchBarView onAppear
-        // will force-focus the NSTextField via AppKit's makeFirstResponder.
-        activePanel?.makeKey()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            activePanel?.makeKey()
+
+        // Use the panel chosen at show time (the screen the user is looking at). Falls back to
+        // re-resolving if it somehow went away. Focusing THIS panel's text field directly avoids
+        // the mouse-location guesswork that failed when the cursor was parked on another screen.
+        let panel = activePanel ?? resolvePrimaryPanel()
+        activePanel = panel
+        panel?.makeKeyAndOrderFront(nil)
+        // Focus after the search bar has been inserted into the hierarchy and the panel resized.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            panel?.focusSearchField()
         }
     }
 

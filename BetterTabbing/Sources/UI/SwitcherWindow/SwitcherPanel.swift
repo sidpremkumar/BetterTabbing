@@ -341,8 +341,12 @@ final class SwitcherPanel: NSPanel {
     }
 
     /// Show panel on its associated screen (used by SwitcherPanelManager for multi-screen display)
-    /// - Parameter skipStateUpdate: If true, assumes AppState is already updated by the manager
-    func showOnScreen(skipStateUpdate: Bool = false) {
+    /// - Parameters:
+    ///   - skipStateUpdate: If true, assumes AppState is already updated by the manager
+    ///   - makeKey: If true, this panel becomes the key window (should be true for exactly ONE
+    ///     panel — the one on the screen the user is looking at — so keyboard/search input lands there).
+    ///     Mirror panels on other screens are ordered front without stealing key status.
+    func showOnScreen(skipStateUpdate: Bool = false, makeKey: Bool = true) {
         guard let screen = associatedScreen ?? NSScreen.main ?? NSScreen.screens.first else { return }
 
         if !skipStateUpdate {
@@ -377,10 +381,38 @@ final class SwitcherPanel: NSPanel {
 
         // Show instantly
         alphaValue = 1
-        makeKeyAndOrderFront(nil)
+        if makeKey {
+            makeKeyAndOrderFront(nil)
+        } else {
+            // Mirror panel: show it without stealing key status from the primary panel.
+            orderFrontRegardless()
+        }
 
         // Start monitoring for clicks outside (posts notification for manager to handle)
         startClickOutsideMonitor()
+    }
+
+    /// Deterministically focus this panel's search text field.
+    /// Unlike walking `NSApp.keyWindow`, this targets THIS panel specifically, so with
+    /// multiple mirror panels the search focus lands on the intended screen.
+    func focusSearchField() {
+        guard let textField = Self.findEditableTextField(in: contentView) else { return }
+        makeKeyAndOrderFront(nil)
+        makeFirstResponder(textField)
+    }
+
+    /// Find the first editable NSTextField in a view hierarchy.
+    private static func findEditableTextField(in view: NSView?) -> NSTextField? {
+        guard let view = view else { return nil }
+        if let tf = view as? NSTextField, tf.isEditable {
+            return tf
+        }
+        for subview in view.subviews {
+            if let found = findEditableTextField(in: subview) {
+                return found
+            }
+        }
+        return nil
     }
 
     /// Recenter on the associated screen (called when screen configuration changes)
