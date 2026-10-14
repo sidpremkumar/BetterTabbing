@@ -137,7 +137,8 @@ final class SwitcherPanelManager {
         primary?.makeKeyAndOrderFront(nil)
 
         let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-        print("[SwitcherPanelManager] Shown \(panels.count) panels in \(Int(elapsed))ms with \(finalApps.count) apps")
+        let displayedOrder = finalApps.prefix(10).map { $0.name }.joined(separator: " > ")
+        DiagnosticLog.shared.log("[SwitcherPanelManager] Switcher shown (\(panels.count) panels, \(Int(elapsed))ms). Displayed order: \(displayedOrder)")
     }
 
     func show() {
@@ -148,6 +149,7 @@ final class SwitcherPanelManager {
         AppState.shared.selectedAppIndex = apps.count > 1 ? 1 : 0
         AppState.shared.selectedWindowIndex = 0
         AppState.shared.isVisible = true
+        DiagnosticLog.shared.log("[SwitcherPanelManager] Switcher shown (sync refresh). Displayed order: \(apps.prefix(10).map { $0.name }.joined(separator: " > "))")
 
         // Pick the key panel BEFORE showing any panel (NSScreen.main must be read first).
         let primary = resolvePrimaryPanel()

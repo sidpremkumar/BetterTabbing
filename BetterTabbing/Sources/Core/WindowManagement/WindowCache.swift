@@ -20,6 +20,12 @@ final class WindowCache: @unchecked Sendable {
     private var suppressedPid: pid_t?
     private var suppressUntil: Date?
 
+    // An activation that arrived while its app wasn't in the cache yet (freshly launched or
+    // relaunched app). Dropping it silently leaves the frontmost app stranded at the END of
+    // the MRU list; instead we remember it and promote the app once a refresh brings it in.
+    private var pendingFrontPid: pid_t?
+    private var pendingFrontSetAt: Date?
+
     private let enumerator = WindowEnumerator()
     private var workspaceObservers: [NSObjectProtocol] = []
 
@@ -50,43 +56,84 @@ final class WindowCache: @unchecked Sendable {
             return cache
         }
 
-        // Capture existing order for MRU preservation
-        let existingOrder = cache.map { $0.pid }
-
         // Enumerate synchronously (this is slow, ~100-200ms)
         var freshApplications = enumerator.enumerateGroupedByApp()
         attachResourceUsage(to: &freshApplications)
 
-        // Merge preserving MRU order
-        if existingOrder.isEmpty {
-            cache = freshApplications
-        } else {
-            var freshByPid: [pid_t: ApplicationModel] = [:]
-            for app in freshApplications {
-                freshByPid[app.pid] = app
-            }
-
-            var result: [ApplicationModel] = []
-            var usedPids: Set<pid_t> = []
-
-            for pid in existingOrder {
-                if let freshApp = freshByPid[pid] {
-                    result.append(freshApp)
-                    usedPids.insert(pid)
-                }
-            }
-
-            for app in freshApplications {
-                if !usedPids.contains(app.pid) {
-                    result.append(app)
-                }
-            }
-
-            cache = result
-        }
-
+        cache = applyPendingFront(to: mergeIntoCache(freshApplications))
         lastUpdate = Date()
         return cache
+    }
+
+    /// Merge freshly-enumerated apps into the existing MRU-ordered cache.
+    /// Preserves the current cache order for apps still present, and — crucially — keeps apps
+    /// that are still running but were transiently absent from THIS enumeration pass (AX can
+    /// flake under heavy switching). Without this, a missed app gets evicted and later re-added
+    /// as a "new" app in alphabetical order, i.e. dumped at the end of the list. Genuinely
+    /// terminated apps (process gone) are dropped; brand-new apps are appended after the order.
+    /// Caller MUST hold `lock`.
+    private func mergeIntoCache(_ fresh: [ApplicationModel]) -> [ApplicationModel] {
+        let currentCache = cache
+        if currentCache.isEmpty {
+            return fresh
+        }
+
+        var freshByPid: [pid_t: ApplicationModel] = [:]
+        for app in fresh { freshByPid[app.pid] = app }
+
+        let runningPids = Set(NSWorkspace.shared.runningApplications.map { $0.processIdentifier })
+
+        var result: [ApplicationModel] = []
+        var usedPids: Set<pid_t> = []
+
+        for existing in currentCache {
+            let pid = existing.pid
+            if let freshApp = freshByPid[pid] {
+                // Present this pass — use fresh window/resource data.
+                result.append(freshApp)
+                usedPids.insert(pid)
+            } else if runningPids.contains(pid) {
+                // Still running but missed this enumeration — keep in place, do NOT evict.
+                result.append(existing)
+                usedPids.insert(pid)
+                DiagnosticLog.shared.log("[WindowCache] merge: \(existing.name) (pid \(pid)) missing from enumeration but still running — kept in place")
+            } else {
+                DiagnosticLog.shared.log("[WindowCache] merge: \(existing.name) (pid \(pid)) process gone — dropped from cache")
+            }
+        }
+
+        // Brand-new apps that weren't in the cache yet (appended after the preserved order).
+        for app in fresh where !usedPids.contains(app.pid) {
+            result.append(app)
+            DiagnosticLog.shared.log("[WindowCache] merge: \(app.name) (pid \(app.pid)) not in cache — appended at END (index \(result.count - 1))")
+        }
+
+        return result
+    }
+
+    /// Promote the app whose activation arrived before it was cached (see pendingFrontPid).
+    /// A pending pid survives refreshes that still miss the app (its windows may not exist
+    /// yet right after launch), capped at 10s so a stale marker can't promote much later.
+    /// Caller MUST hold `lock`.
+    private func applyPendingFront(to apps: [ApplicationModel]) -> [ApplicationModel] {
+        guard let pid = pendingFrontPid else { return apps }
+
+        if let index = apps.firstIndex(where: { $0.pid == pid }) {
+            pendingFrontPid = nil
+            pendingFrontSetAt = nil
+            var result = apps
+            let app = result.remove(at: index)
+            result.insert(app, at: 0)
+            DiagnosticLog.shared.log("[WindowCache] applyPendingFront: \(app.name) (pid \(pid)) promoted from index \(index) to front after refresh")
+            return result
+        }
+
+        if let setAt = pendingFrontSetAt, Date().timeIntervalSince(setAt) > 10 {
+            DiagnosticLog.shared.log("[WindowCache] applyPendingFront: pid \(pid) never appeared in a refresh, discarding pending activation")
+            pendingFrontPid = nil
+            pendingFrontSetAt = nil
+        }
+        return apps
     }
 
     /// Async wrapper for compatibility
@@ -111,35 +158,12 @@ final class WindowCache: @unchecked Sendable {
         var freshApplications = enumerator.enumerateGroupedByApp()
         attachResourceUsage(to: &freshApplications)
 
-        // Build a lookup of fresh apps by PID
-        var freshByPid: [pid_t: ApplicationModel] = [:]
-        for app in freshApplications {
-            freshByPid[app.pid] = app
-        }
-
         // Merge under the lock, using the CURRENT cache order as the authority.
         // This captures any moveAppToFront() that happened during enumeration, so a
         // quick-switch that raced with this prefetch is not clobbered by a stale snapshot.
+        // mergeIntoCache also preserves still-running apps missed by this enumeration pass.
         lock.lock()
-        let currentOrder = cache.map { $0.pid }
-
-        var result: [ApplicationModel] = []
-        var usedPids: Set<pid_t> = []
-
-        // Apps in current MRU order (that still exist), with fresh window data
-        for pid in currentOrder {
-            if let freshApp = freshByPid[pid] {
-                result.append(freshApp)
-                usedPids.insert(pid)
-            }
-        }
-
-        // Any new apps that weren't in the cache yet (at the end)
-        for app in freshApplications {
-            if !usedPids.contains(app.pid) {
-                result.append(app)
-            }
-        }
+        var result = applyPendingFront(to: mergeIntoCache(freshApplications))
 
         // Keep isActive consistent with MRU convention (front = active), so the fresh
         // enumeration's stale active flag doesn't fight moveAppToFront after a race.
@@ -158,10 +182,10 @@ final class WindowCache: @unchecked Sendable {
         cache = result
         lastUpdate = Date()
         prefetchInProgress = false
-        let count = result.count
+        let order = result.prefix(10).map { $0.name }.joined(separator: " > ")
         lock.unlock()
 
-        print("[WindowCache] Prefetch complete, \(count) apps, preserved MRU order")
+        DiagnosticLog.shared.log("[WindowCache] Prefetch complete, \(result.count) apps. Order: \(order)")
     }
 
     /// Prefetch on background thread - non-blocking
@@ -191,17 +215,27 @@ final class WindowCache: @unchecked Sendable {
         }
 
         guard let index = cache.firstIndex(where: { $0.pid == pid }) else {
-            // App not in cache - invalidate so next fetch gets fresh data
-            print("[WindowCache] moveAppToFront: app PID \(pid) not in cache, invalidating")
+            // App not in cache (freshly launched/relaunched). Don't drop the activation:
+            // remember it so the next refresh promotes this app to the front instead of
+            // leaving it stranded at the end of the MRU list.
+            DiagnosticLog.shared.log("[WindowCache] moveAppToFront: app PID \(pid) not in cache, deferring to next refresh")
+            pendingFrontPid = pid
+            pendingFrontSetAt = Date()
             lastUpdate = nil
+            DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+                self?.prefetch()
+            }
             return
         }
+
+        // This activation supersedes any deferred one for a not-yet-cached app.
+        pendingFrontPid = nil
 
         let appName = cache[index].name
 
         // Already at front? Just update active state
         if index == 0 {
-            print("[WindowCache] moveAppToFront: \(appName) already at front")
+            DiagnosticLog.shared.log("[WindowCache] moveAppToFront: \(appName) already at front (fromOurSwitch: \(fromOurSwitch))")
             if !cache.isEmpty && !cache[0].isActive {
                 cache[0] = ApplicationModel(
                     pid: cache[0].pid,
@@ -233,9 +267,9 @@ final class WindowCache: @unchecked Sendable {
             )
         }
 
-        // Log the new order (top 5 apps)
-        let topApps = cache.prefix(5).map { $0.name }.joined(separator: " > ")
-        print("[WindowCache] moveAppToFront: \(appName) moved from index \(index) to front. Order: \(topApps)")
+        // Log the new order (top 10 apps)
+        let topApps = cache.prefix(10).map { $0.name }.joined(separator: " > ")
+        DiagnosticLog.shared.log("[WindowCache] moveAppToFront: \(appName) moved from index \(index) to front (fromOurSwitch: \(fromOurSwitch)). Order: \(topApps)")
     }
 
     /// Check if external activation should be suppressed for a specific PID
@@ -279,13 +313,13 @@ final class WindowCache: @unchecked Sendable {
 
             // Skip if we're suppressing this specific app (our own switch just happened)
             if self.shouldSuppressExternalActivation(for: pid) {
-                print("[WindowCache] Ignoring our own activation: \(app.localizedName ?? "unknown")")
+                DiagnosticLog.shared.log("[WindowCache] Ignoring our own activation: \(app.localizedName ?? "unknown")")
                 return
             }
 
             // When an app is activated externally, move it to front of our cache
+            DiagnosticLog.shared.log("[WindowCache] App activated externally: \(app.localizedName ?? "unknown") (pid \(pid))")
             self.moveAppToFront(pid: pid, fromOurSwitch: false)
-            print("[WindowCache] App activated externally: \(app.localizedName ?? "unknown")")
         }
         workspaceObservers.append(activateObserver)
 
@@ -303,7 +337,7 @@ final class WindowCache: @unchecked Sendable {
             ) { [weak self] notification in
                 guard let self = self else { return }
                 let appName = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.localizedName ?? "unknown"
-                print("[WindowCache] App \(name == NSWorkspace.didLaunchApplicationNotification ? "launched" : "terminated"): \(appName), refreshing cache")
+                DiagnosticLog.shared.log("[WindowCache] App \(name == NSWorkspace.didLaunchApplicationNotification ? "launched" : "terminated"): \(appName), refreshing cache")
                 self.invalidate()
                 self.prefetchAsync()
             }

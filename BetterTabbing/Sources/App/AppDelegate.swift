@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WindowCache.shared.prefetchAsync()
         WindowCache.shared.startMonitoring()
 
+        // Watch for Secure Keyboard Entry, which silently blinds the event tap
+        SecureInputMonitor.shared.start()
+
         print("[BetterTabbing] App initialized successfully")
     }
 

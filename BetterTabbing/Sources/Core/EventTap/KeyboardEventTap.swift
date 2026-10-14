@@ -86,7 +86,7 @@ final class KeyboardEventTap {
         }
         eventTap = nil
         runLoopSource = nil
-        print("[KeyboardEventTap] Disabled")
+        DiagnosticLog.shared.log("[EventTap] Disabled")
     }
 
     func setSwitcherVisible(_ visible: Bool) {
@@ -104,7 +104,7 @@ final class KeyboardEventTap {
 
     func setSearchModeActive(_ active: Bool) {
         searchModeActive = active
-        print("[KeyboardEventTap] Search mode: \(active)")
+        DiagnosticLog.shared.log("[EventTap] Search mode: \(active)")
     }
 
     func setActivationModifier(_ modifier: ModifierKey) {
@@ -136,7 +136,7 @@ final class KeyboardEventTap {
             },
             userInfo: userInfo
         ) else {
-            print("[KeyboardEventTap] Failed to create event tap. Check Input Monitoring permission.")
+            DiagnosticLog.shared.log("[EventTap] Failed to create event tap. Check Input Monitoring permission.")
             return
         }
 
@@ -145,15 +145,18 @@ final class KeyboardEventTap {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
 
-        print("[KeyboardEventTap] Successfully created and enabled")
+        DiagnosticLog.shared.log("[EventTap] Successfully created and enabled")
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         // Handle tap disabled events
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            let reason = type == .tapDisabledByTimeout ? "tapDisabledByTimeout" : "tapDisabledByUserInput"
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
-                print("[KeyboardEventTap] Re-enabled after being disabled")
+                DiagnosticLog.shared.log("[EventTap] Re-enabled after \(reason)")
+            } else {
+                DiagnosticLog.shared.log("[EventTap] Got \(reason) but tap is nil, cannot re-enable")
             }
             return Unmanaged.passUnretained(event)
         }
@@ -178,7 +181,7 @@ final class KeyboardEventTap {
                 // Quick switch: released before timer fired (UI never shown)
                 if pendingActivation && !hadInteractionSinceActivation {
                     pendingActivation = false
-                    print("[KeyboardEventTap] Quick switch detected (\(Int(elapsed * 1000))ms)")
+                    DiagnosticLog.shared.log("[EventTap] Quick switch detected (\(Int(elapsed * 1000))ms)")
                     onShortcutTriggered.send(.quickSwitch)
                     return Unmanaged.passUnretained(event)
                 }
@@ -186,7 +189,7 @@ final class KeyboardEventTap {
                 // Normal release while switcher visible (not in search mode)
                 if switcherVisible && !searchModeActive {
                     pendingActivation = false
-                    print("[KeyboardEventTap] Modifier released, confirming selection")
+                    DiagnosticLog.shared.log("[EventTap] Modifier released, confirming selection")
                     onShortcutTriggered.send(.confirm)
                     return Unmanaged.passUnretained(event)
                 }
@@ -201,7 +204,7 @@ final class KeyboardEventTap {
         if type == .keyUp {
             if keyCode == UInt16(kVK_ANSI_Q) && isHoldingQuit {
                 isHoldingQuit = false
-                print("[KeyboardEventTap] Q released, cancel quit hold")
+                DiagnosticLog.shared.log("[EventTap] Q released, cancel quit hold")
                 onShortcutTriggered.send(.quitHoldCancelled)
             }
             if keyCode == UInt16(kVK_ANSI_E) && isHoldingE {
@@ -209,11 +212,11 @@ final class KeyboardEventTap {
                 isHoldingE = false
                 if holdDuration < eHoldThreshold {
                     // Short tap → toggle resource monitor
-                    print("[KeyboardEventTap] E tapped (\(Int(holdDuration * 1000))ms), toggle monitor")
+                    DiagnosticLog.shared.log("[EventTap] E tapped (\(Int(holdDuration * 1000))ms), toggle monitor")
                     onShortcutTriggered.send(.toggleResourceMonitor)
                 } else {
                     // Long hold → AI insight requested
-                    print("[KeyboardEventTap] E held (\(Int(holdDuration * 1000))ms), AI insight")
+                    DiagnosticLog.shared.log("[EventTap] E held (\(Int(holdDuration * 1000))ms), AI insight")
                     onShortcutTriggered.send(.aiInsightRequested)
                 }
             }
@@ -238,17 +241,17 @@ final class KeyboardEventTap {
                     showSwitcherTimer = nil
                     pendingActivation = false
                     switcherVisible = true
-                    print("[KeyboardEventTap] Second TAB pressed, showing switcher immediately")
+                    DiagnosticLog.shared.log("[EventTap] Second TAB pressed, showing switcher immediately")
                     onShortcutTriggered.send(.showSwitcher)
                     // Don't cycle yet - first show, next TAB will cycle
                     return nil
                 }
 
                 if modifierTracker.isShiftPressed {
-                    print("[KeyboardEventTap] Cycle previous")
+                    DiagnosticLog.shared.log("[EventTap] Cycle previous")
                     onShortcutTriggered.send(.cyclePrevious)
                 } else {
-                    print("[KeyboardEventTap] Cycle next")
+                    DiagnosticLog.shared.log("[EventTap] Cycle next")
                     onShortcutTriggered.send(.cycleNext)
                 }
                 return nil  // Consume the event
@@ -258,10 +261,10 @@ final class KeyboardEventTap {
             if keyCode == UInt16(kVK_ANSI_Grave) {
                 hadInteractionSinceActivation = true
                 if modifierTracker.isShiftPressed {
-                    print("[KeyboardEventTap] Cycle window previous")
+                    DiagnosticLog.shared.log("[EventTap] Cycle window previous")
                     onShortcutTriggered.send(.cycleWindowPrevious)
                 } else {
-                    print("[KeyboardEventTap] Cycle window next")
+                    DiagnosticLog.shared.log("[EventTap] Cycle window next")
                     onShortcutTriggered.send(.cycleWindowNext)
                 }
                 return nil
@@ -278,7 +281,7 @@ final class KeyboardEventTap {
                     if !isHoldingQuit {
                         isHoldingQuit = true
                         hadInteractionSinceActivation = true
-                        print("[KeyboardEventTap] Q pressed, start quit hold")
+                        DiagnosticLog.shared.log("[EventTap] Q pressed, start quit hold")
                         onShortcutTriggered.send(.quitHoldStarted)
                     }
                     return nil
@@ -312,10 +315,10 @@ final class KeyboardEventTap {
             if keyCode == UInt16(kVK_Return) {
                 hadInteractionSinceActivation = true
                 if searchModeActive {
-                    print("[KeyboardEventTap] Confirm search selection")
+                    DiagnosticLog.shared.log("[EventTap] Confirm search selection")
                     onShortcutTriggered.send(.confirm)
                 } else {
-                    print("[KeyboardEventTap] Activate search")
+                    DiagnosticLog.shared.log("[EventTap] Activate search")
                     onShortcutTriggered.send(.activateSearch)
                 }
                 return nil
@@ -323,7 +326,7 @@ final class KeyboardEventTap {
 
             // Escape = dismiss
             if keyCode == UInt16(kVK_Escape) {
-                print("[KeyboardEventTap] Dismiss")
+                DiagnosticLog.shared.log("[EventTap] Dismiss")
                 onShortcutTriggered.send(.dismiss)
                 return nil
             }
@@ -333,14 +336,14 @@ final class KeyboardEventTap {
                 // In search mode: only arrow keys navigate results (WSAD passed through for typing)
                 if keyCode == UInt16(kVK_UpArrow) || keyCode == UInt16(kVK_LeftArrow) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Navigate up (search)")
+                    DiagnosticLog.shared.log("[EventTap] Navigate up (search)")
                     onShortcutTriggered.send(.navigateUp)
                     return nil
                 }
 
                 if keyCode == UInt16(kVK_DownArrow) || keyCode == UInt16(kVK_RightArrow) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Navigate down (search)")
+                    DiagnosticLog.shared.log("[EventTap] Navigate down (search)")
                     onShortcutTriggered.send(.navigateDown)
                     return nil
                 }
@@ -349,10 +352,10 @@ final class KeyboardEventTap {
                 if keyCode == activationKeyCode {
                     hadInteractionSinceActivation = true
                     if modifierTracker.isShiftPressed {
-                        print("[KeyboardEventTap] Tab+Shift in search = navigate up")
+                        DiagnosticLog.shared.log("[EventTap] Tab+Shift in search = navigate up")
                         onShortcutTriggered.send(.navigateUp)
                     } else {
-                        print("[KeyboardEventTap] Tab in search = navigate down")
+                        DiagnosticLog.shared.log("[EventTap] Tab in search = navigate down")
                         onShortcutTriggered.send(.navigateDown)
                     }
                     return nil
@@ -362,14 +365,14 @@ final class KeyboardEventTap {
                 // Left/Right (A/D) = cycle through apps (linear)
                 if keyCode == UInt16(kVK_LeftArrow) || keyCode == UInt16(kVK_ANSI_A) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Left/A = previous app")
+                    DiagnosticLog.shared.log("[EventTap] Left/A = previous app")
                     onShortcutTriggered.send(.cyclePrevious)
                     return nil
                 }
 
                 if keyCode == UInt16(kVK_RightArrow) || keyCode == UInt16(kVK_ANSI_D) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Right/D = next app")
+                    DiagnosticLog.shared.log("[EventTap] Right/D = next app")
                     onShortcutTriggered.send(.cycleNext)
                     return nil
                 }
@@ -377,14 +380,14 @@ final class KeyboardEventTap {
                 // Up/Down (W/S) = move to row above/below in the grid
                 if keyCode == UInt16(kVK_UpArrow) || keyCode == UInt16(kVK_ANSI_W) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Up/W = row above")
+                    DiagnosticLog.shared.log("[EventTap] Up/W = row above")
                     onShortcutTriggered.send(.navigateRowUp)
                     return nil
                 }
 
                 if keyCode == UInt16(kVK_DownArrow) || keyCode == UInt16(kVK_ANSI_S) {
                     hadInteractionSinceActivation = true
-                    print("[KeyboardEventTap] Down/S = row below")
+                    DiagnosticLog.shared.log("[EventTap] Down/S = row below")
                     onShortcutTriggered.send(.navigateRowDown)
                     return nil
                 }
@@ -396,7 +399,7 @@ final class KeyboardEventTap {
 
         // Check for activation shortcut (OPTION+TAB by default) - only when switcher not visible
         if keyCode == activationKeyCode && modifierTracker.contains([activationModifier]) && !pendingActivation {
-            print("[KeyboardEventTap] Activation started (switcherVisible=\(switcherVisible))")
+            DiagnosticLog.shared.log("[EventTap] Activation started (switcherVisible=\(switcherVisible))")
             activationTime = CFAbsoluteTimeGetCurrent()
             hadInteractionSinceActivation = false
             pendingActivation = true
@@ -410,7 +413,7 @@ final class KeyboardEventTap {
                 guard let self = self, self.pendingActivation else { return }
                 self.pendingActivation = false
                 self.switcherVisible = true
-                print("[KeyboardEventTap] Timer fired, showing switcher")
+                DiagnosticLog.shared.log("[EventTap] Timer fired, showing switcher")
                 self.onShortcutTriggered.send(.showSwitcher)
             }
             showSwitcherTimer = timer

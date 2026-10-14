@@ -4,18 +4,26 @@ import SwiftUI
 struct BetterTabbingApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState.shared
+    @StateObject private var secureInput = SecureInputMonitor.shared
 
     var body: some Scene {
         // Menu bar only - no dock icon
-        MenuBarExtra("BetterTabbing", systemImage: "rectangle.stack") {
+        MenuBarExtra {
             MenuBarView()
                 .environmentObject(appState)
+                .environmentObject(secureInput)
+        } label: {
+            // Warning triangle while Secure Keyboard Entry blocks the event tap
+            Image(systemName: secureInput.isSecureInputActive
+                  ? "exclamationmark.triangle.fill"
+                  : "rectangle.stack")
         }
     }
 }
 
 struct MenuBarView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var secureInput: SecureInputMonitor
 
     private var shortcutDisplay: String {
         appState.preferences.useSystemShortcut ? "⌘ TAB" : "⌥ TAB"
@@ -25,6 +33,21 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("BetterTabbing")
                 .font(.headline)
+
+            if secureInput.isSecureInputActive {
+                Divider()
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Shortcuts blocked", systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.orange)
+                    Text("\(secureInput.blockingAppName ?? "Another app") has Secure Keyboard Entry on, so \(shortcutDisplay) falls back to the system switcher. Turn it off there to restore BetterTabbing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: 240, alignment: .leading)
+            }
 
             Divider()
 
