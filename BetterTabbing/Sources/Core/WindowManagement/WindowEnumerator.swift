@@ -21,6 +21,13 @@ final class WindowEnumerator {
         "com.apple.SystemUIServer"
     ]
 
+    /// Apps that are always running but only belong in the switcher when they actually have
+    /// a window open. Finder never quits, so without this it would always show up (with a
+    /// synthetic "window") even when there's nothing to switch to.
+    static let hideWhenNoWindowsBundleIDs: Set<String> = [
+        "com.apple.finder"
+    ]
+
     /// Enumerate windows using Accessibility API as the primary source
     /// This is more reliable for window switching since we use AX to raise windows
     func enumerateGroupedByApp(options: EnumerationOptions = .default) -> [ApplicationModel] {
@@ -136,6 +143,14 @@ final class WindowEnumerator {
                     isMinimized: isMinimized,
                     spaceID: nil
                 ))
+            }
+
+            // Skip always-running apps (e.g. Finder) that currently have no real windows.
+            // Only when AX actually succeeded — an AX failure still gets the synthetic fallback.
+            if windows.isEmpty && axResult == .success
+                && Self.hideWhenNoWindowsBundleIDs.contains(bundleIdentifier) {
+                print("[WindowEnumerator] \(name) has no windows, hiding from switcher")
+                continue
             }
 
             let icon = app.icon ?? NSImage(named: NSImage.applicationIconName) ?? NSImage()

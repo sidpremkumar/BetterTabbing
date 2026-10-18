@@ -92,6 +92,10 @@ final class WindowCache: @unchecked Sendable {
                 // Present this pass — use fresh window/resource data.
                 result.append(freshApp)
                 usedPids.insert(pid)
+            } else if WindowEnumerator.hideWhenNoWindowsBundleIDs.contains(existing.bundleIdentifier) {
+                // Always-running app (Finder) that was intentionally left out because it has no
+                // windows anymore — drop it rather than keeping a stale entry around.
+                DiagnosticLog.shared.log("[WindowCache] merge: \(existing.name) (pid \(pid)) has no windows — dropped from cache")
             } else if runningPids.contains(pid) {
                 // Still running but missed this enumeration — keep in place, do NOT evict.
                 result.append(existing)
