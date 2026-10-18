@@ -71,6 +71,15 @@ final class WindowEnumerator {
             var windows: [WindowInfo] = []
 
             for axWindow in axWindows {
+                // Skip elements that aren't actually windows. Finder reports its desktop as an
+                // AXScrollArea in kAXWindows, which would otherwise count as an open window.
+                // Permissive: elements with no readable role are kept.
+                var roleRef: CFTypeRef?
+                AXUIElementCopyAttributeValue(axWindow, kAXRoleAttribute as CFString, &roleRef)
+                if let role = roleRef as? String, role != kAXWindowRole {
+                    continue
+                }
+
                 // Get window ID
                 var windowID: CGWindowID = 0
                 let idResult = _AXUIElementGetWindow(axWindow, &windowID)
